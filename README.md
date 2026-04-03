@@ -80,18 +80,22 @@ Um **embedding** é uma representação numérica do significado de um texto.
 
 Imagine que cada texto vira um ponto no espaço. Textos com significados parecidos ficam próximos. Textos diferentes ficam distantes.
 
-```
-Espaço de Embeddings (simplificado em 2D):
-
-  ▲
-  │          • "machine learning"
-  │        • "inteligência artificial"
-  │      • "redes neurais"
-  │
-  │                              • "futebol"
-  │                            • "esporte"
-  │
-  └──────────────────────────────────────► 
+```mermaid
+quadrantChart
+    title Espaço de Embeddings — conceitos similares agrupam-se
+    x-axis Esporte / Cotidiano ──────────── Tecnologia / Ciência
+    y-axis Concreto ─────────────────────── Abstrato
+    quadrant-1 Ciência abstrata
+    quadrant-2 Esporte abstrato
+    quadrant-3 Esporte concreto
+    quadrant-4 Tecnologia concreta
+    machine learning: [0.82, 0.88]
+    inteligência artificial: [0.78, 0.82]
+    redes neurais: [0.75, 0.76]
+    deep learning: [0.80, 0.72]
+    futebol: [0.22, 0.28]
+    esporte: [0.18, 0.22]
+    natação: [0.15, 0.20]
 ```
 
 Na prática, embeddings têm centenas ou milhares de dimensões (não apenas 2), mas a ideia é a mesma: **proximidade no espaço = similaridade de significado**.
@@ -127,18 +131,12 @@ Onde:
 
 ### Interpretação geométrica
 
-```
-       ▲                  ▲                  ▲
-       │   x              │  x               │
-       │  /               │ /                │
-       │ / θ≈0°           │/ θ=90°           │          θ=180°
-       │/──────► y        └────────► y     ◄─┴────────► y
-                                              x (sentido oposto)
-
-  θ próximo de 0°     θ próximo de 90°    θ próximo de 180°
-  cos(θ) → 1          cos(θ) → 0          cos(θ) → -1
-  Vetores SIMILARES   Vetores ORTOGONAIS  Vetores OPOSTOS
-```
+| θ ≈ 0° — **SIMILARES** | θ = 90° — **ORTOGONAIS** | θ ≈ 180° — **OPOSTOS** |
+|:---:|:---:|:---:|
+| `cos(θ) → 1` | `cos(θ) → 0` | `cos(θ) → −1` |
+| <pre>  ↑<br>  │╲ x<br>  │ ╲<br>  │  ╲<br>  │← θ╲<br>  └────╲──→ y<br>       ╲<br>        y</pre> | <pre>  ↑ x<br>  │<br>  │<br>  │← θ<br>  └────────→ y</pre> | <pre>x ←────────<br>           │<br>           │ θ ≈ 180°<br>  ─────────┼──→ y</pre> |
+| Textos com o **mesmo significado** | Textos **sem relação** alguma | Textos com sentidos **opostos** |
+| "cão" e "cachorro" | "futebol" e "algoritmo" | "amor" e "ódio" |
 
 > **Por que cosseno e não distância euclidiana?**
 > O cosseno mede o **ângulo** entre vetores, não o comprimento. Um texto curto e um longo sobre o mesmo assunto têm o mesmo ângulo, mas comprimentos diferentes. O cosseno os reconhece como similares corretamente.
@@ -170,17 +168,21 @@ similaridade = dot_product / (norm_v1 * norm_v2)
 
 ### Documentos como vetores no espaço
 
-```
-           term 1
-              ▲
-              │  • document 1
-              │ • document 2
-              │• query
-              │
-term 2 ◄──────┼──────► term 3
+```mermaid
+flowchart TD
+    O(("  origem\n(zero)  "))
+
+    O -->|"cos = 0.96 🔥"| D2["📄 document 2\nmuito relevante"]
+    O -->|"cos = 0.81"| D1["📄 document 1\nrelevante"]
+    O -->|"cos = 0.29 ✗"| D3["📄 document 3\npoco relevante"]
+    O -.->|"vetor da\npergunta"| Q["❓ query"]
+
+    style D2 fill:#1a4a1a,color:#7fff7f
+    style D3 fill:#4a1a1a,color:#ff9999
+    style Q  fill:#1a2a4a,color:#99ccff
 ```
 
-> O query (pergunta) está mais próximo angularmente do document 2. Logo, document 2 é mais relevante. É exatamente isso que o `retrieve()` calcula.
+> Cada seta saindo da origem é um vetor. O ângulo entre o vetor da **query** e o de cada **document** determina a relevância — ângulo menor = `cos` maior = mais relevante. É exatamente isso que o `retrieve()` calcula.
 
 ---
 

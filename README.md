@@ -1,5 +1,11 @@
 # Naive RAG — do Zero em Python
 
+<p align="center">
+  <img src="https://img.shields.io/badge/RAG-From%20Scratch-blue?style=for-the-badge">
+  <img src="https://img.shields.io/badge/Python-3.12+-green?style=for-the-badge">
+  <img src="https://img.shields.io/badge/Ollama-Local%20LLM-orange?style=for-the-badge">
+</p>
+
 > **Objetivo deste documento:** ensinar RAG e Python ao mesmo tempo, do ambiente ao código, sem precisar de nenhuma fonte externa.
 
 ---
@@ -47,8 +53,8 @@ O RAG tem duas fases distintas:
 
 ```mermaid
 flowchart LR
-    A["📄 Documentos\n(textos da base)"] --> B["🔢 Modelo de\nEmbedding"]
-    B --> C["🗄️ Matriz de\nVetores\ndoc_embeddings"]
+    A["📄 Documentos"] --> B["🔢 Modelo de Embedding"]
+    B --> C["🗄️ Matriz de Vetores"]
 ```
 
 > Cada documento é convertido em um vetor numérico e armazenado. Isso é feito uma única vez.
@@ -56,15 +62,19 @@ flowchart LR
 ### Fase 2 — Consulta (feita a cada pergunta)
 
 ```mermaid
-flowchart TD
-    P["❓ Pergunta do usuário"] --> E["🔢 Modelo de\nEmbedding"]
-    E --> QV["vetor da pergunta"]
-    QV --> S["📐 Similaridade\nde Cosseno\nvs. cada documento"]
-    DB["🗄️ doc_embeddings"] --> S
-    S --> R["🏆 Top-K documentos\nmais relevantes"]
-    R --> G["🤖 LLM\n(gemma4)"]
-    P --> G
-    G --> A["✅ Resposta final"]
+%%{init: {'theme': 'dark'}}%%
+flowchart LR
+    U["👤 Pergunta"] --> E["🔢 Embedding"]
+    E --> V["Vetor da Query"]
+
+    V --> S["📐 Similaridade"]
+    DB["🗄️ Vector DB"] --> S
+
+    S --> K["🏆 Top-K Docs"]
+    K --> LLM["🤖 LLM"]
+
+    U --> LLM
+    LLM --> R["✅ Resposta"]
 ```
 
 **Resumindo em 3 verbos:**
@@ -81,24 +91,27 @@ Um **embedding** é uma representação numérica do significado de um texto.
 Imagine que cada texto vira um ponto no espaço. Textos com significados parecidos ficam próximos. Textos diferentes ficam distantes.
 
 ```mermaid
-quadrantChart
-    title Espaço de Embeddings — conceitos similares agrupam-se
-    x-axis Esporte --> Ciência
-    y-axis Concreto --> Abstrato
-    quadrant-1 Ciência abstrata
-    quadrant-2 Esporte abstrato
-    quadrant-3 Esporte concreto
-    quadrant-4 Tecnologia concreta
-    machine learning: [0.82, 0.88]
-    inteligência artificial: [0.78, 0.82]
-    redes neurais: [0.75, 0.76]
-    deep learning: [0.80, 0.72]
-    futebol: [0.22, 0.28]
-    esporte: [0.18, 0.22]
-    natação: [0.15, 0.20]
+%%{init: {'theme': 'dark'}}%%
+flowchart LR
+    subgraph Ciencia ["🔬 Ciencia"]
+        ML["Machine Learning"]
+        AI["Artificial Intelligence"]
+        DL["Deep Learning"]
+    end
+
+    subgraph Esporte ["⚽ Esporte"]
+        FUT["Football"]
+        NAT["Swimming"]
+    end
+
+    ML --- AI
+    AI --- DL
+    FUT --- NAT
+
+    ML -. "distante" .- FUT
 ```
 
-Na prática, embeddings têm centenas ou milhares de dimensões (não apenas 2), mas a ideia é a mesma: **proximidade no espaço = similaridade de significado**.
+> Conceitos da mesma área ficam **próximos** (conectados por linhas sólidas). Conceitos de áreas diferentes ficam **distantes** (linha pontilhada). Na prática, embeddings têm centenas ou milhares de dimensões, mas a ideia é a mesma: **proximidade no espaço = similaridade de significado**.
 
 ### Como o Ollama gera embeddings?
 
@@ -119,10 +132,8 @@ Para comparar dois textos, comparamos seus vetores. A métrica usada é a **simi
 
 ### A fórmula
 
-```
-                  A · B
-cos(θ) = ─────────────────────
-           ‖A‖ × ‖B‖
+```math
+\cos(\theta) = \frac{A \cdot B}{\|A\| \times \|B\|}
 ```
 
 Onde:
@@ -166,23 +177,21 @@ similaridade = dot_product / (norm_v1 * norm_v2)
 # similaridade ≈ 0.974  ← muito similares!
 ```
 
-### Documentos como vetores no espaço
+### Documentos como vetores — Relevância visual
 
 ```mermaid
-flowchart TD
-    O(("  origem\n(zero)  "))
+%%{init: {'theme': 'dark'}}%%
+flowchart LR
+    Q["❓ Query"] -->|"0.96 🔥"| D2["Doc 2 — Muito relevante"]
+    Q -->|"0.81 👍"| D1["Doc 1 — Relevante"]
+    Q -->|"0.29 ❌"| D3["Doc 3 — Pouco relevante"]
 
-    O -->|"cos = 0.96 🔥"| D2["📄 document 2\nmuito relevante"]
-    O -->|"cos = 0.81"| D1["📄 document 1\nrelevante"]
-    O -->|"cos = 0.29 ✗"| D3["📄 document 3\npoco relevante"]
-    O -.->|"vetor da\npergunta"| Q["❓ query"]
-
-    style D2 fill:#1a4a1a,color:#7fff7f
-    style D3 fill:#4a1a1a,color:#ff9999
-    style Q  fill:#1a2a4a,color:#99ccff
+    style D2 fill:#1f6f3e,color:#fff
+    style D1 fill:#2d5a9e,color:#fff
+    style D3 fill:#7a2e2e,color:#fff
 ```
 
-> Cada seta saindo da origem é um vetor. O ângulo entre o vetor da **query** e o de cada **document** determina a relevância — ângulo menor = `cos` maior = mais relevante. É exatamente isso que o `retrieve()` calcula.
+> O score de similaridade de cosseno define a relevância: **verde = alta**, **azul = média**, **vermelho = baixa**. É exatamente isso que o `retrieve()` calcula.
 
 ---
 
@@ -348,6 +357,7 @@ ollama list
 ### Visão geral das funções
 
 ```mermaid
+%%{init: {'theme': 'dark'}}%%
 graph TD
     rag["rag(query, top_k)"] --> retrieve
     rag --> generate_answer

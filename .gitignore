@@ -1,0 +1,23 @@
+# Ambiente virtual Python — contém todas as dependências instaladas.
+# Não vai pro git porque é gerado localmente com `python -m venv .venv`
+# e pode ser recriado a partir do requirements.txt ou pyproject.toml.
+.venv/
+
+# Cache do Python — arquivos .pyc são bytecode compilado gerado automaticamente.
+# Cada máquina gera o seu próprio, não faz sentido versionar.
+__pycache__/
+*.pyc
+*.pyo
+
+# Checkpoints do Jupyter — salvamentos automáticos do notebook.
+# O arquivo real é o .ipynb; os checkpoints são temporários.
+.ipynb_checkpoints/
+
+# Variáveis de ambiente — costumam guardar chaves de API, senhas, tokens.
+# NUNCA deve ir pro git para não vazar credenciais.
+.env
+.env.*
+
+# Arquivos de sistema do macOS — criados automaticamente pelo Finder.
+# Não têm utilidade no repositório.
+.DS_Store

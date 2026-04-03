@@ -83,8 +83,8 @@ Imagine que cada texto vira um ponto no espaço. Textos com significados parecid
 ```mermaid
 quadrantChart
     title Espaço de Embeddings — conceitos similares agrupam-se
-    x-axis Esporte / Cotidiano ──────────── Tecnologia / Ciência
-    y-axis Concreto ─────────────────────── Abstrato
+    x-axis Esporte --> Ciência
+    y-axis Concreto --> Abstrato
     quadrant-1 Ciência abstrata
     quadrant-2 Esporte abstrato
     quadrant-3 Esporte concreto
@@ -131,12 +131,12 @@ Onde:
 
 ### Interpretação geométrica
 
-| θ ≈ 0° — **SIMILARES** | θ = 90° — **ORTOGONAIS** | θ ≈ 180° — **OPOSTOS** |
-|:---:|:---:|:---:|
-| `cos(θ) → 1` | `cos(θ) → 0` | `cos(θ) → −1` |
-| <pre>  ↑<br>  │╲ x<br>  │ ╲<br>  │  ╲<br>  │← θ╲<br>  └────╲──→ y<br>       ╲<br>        y</pre> | <pre>  ↑ x<br>  │<br>  │<br>  │← θ<br>  └────────→ y</pre> | <pre>x ←────────<br>           │<br>           │ θ ≈ 180°<br>  ─────────┼──→ y</pre> |
-| Textos com o **mesmo significado** | Textos **sem relação** alguma | Textos com sentidos **opostos** |
-| "cão" e "cachorro" | "futebol" e "algoritmo" | "amor" e "ódio" |
+| | **θ ≈ 0° — Similares** | **θ = 90° — Ortogonais** | **θ ≈ 180° — Opostos** |
+|---|:---:|:---:|:---:|
+| **Vetores** | ↑ ↗ (quase paralelos) | ↑ e → (em cruz) | ← e → (opostos) |
+| **cos(θ)** | → **1** | → **0** | → **−1** |
+| **Significado** | Mesma direção semântica | Sem relação alguma | Sentidos contrários |
+| **Exemplo** | "cão" e "cachorro" | "futebol" e "algoritmo" | "amor" e "ódio" |
 
 > **Por que cosseno e não distância euclidiana?**
 > O cosseno mede o **ângulo** entre vetores, não o comprimento. Um texto curto e um longo sobre o mesmo assunto têm o mesmo ângulo, mas comprimentos diferentes. O cosseno os reconhece como similares corretamente.

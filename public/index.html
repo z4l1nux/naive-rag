@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RAG — Base de Conhecimento</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <header class="sidebar-header">
+          <div class="logo">
+            <span class="logo-mark">RAG</span>
+            <span class="logo-sub">Base de Conhecimento</span>
+          </div>
+        </header>
+
+        <!-- Tabs -->
+        <div class="tabs">
+          <button class="tab tab--active" data-tab="text">Texto</button>
+          <button class="tab" data-tab="file">Arquivo</button>
+        </div>
+
+        <!-- Tab: manual text -->
+        <section class="tab-panel" id="panel-text">
+          <form id="add-doc-form">
+            <textarea
+              id="doc-content"
+              class="textarea"
+              placeholder="Cole ou escreva o conteudo do documento..."
+              rows="6"
+            ></textarea>
+            <button type="submit" class="btn btn-primary" id="add-btn">
+              <span class="btn-label">Adicionar</span>
+              <span class="btn-spinner hidden"></span>
+            </button>
+          </form>
+        </section>
+
+        <!-- Tab: file upload -->
+        <section class="tab-panel hidden" id="panel-file">
+          <form id="upload-form">
+            <label class="file-drop" id="file-drop">
+              <input type="file" id="file-input" accept=".pdf,.docx,.md,.txt" hidden />
+              <span class="file-drop-icon">+</span>
+              <span class="file-drop-label" id="file-drop-label">
+                Clique ou arraste um arquivo
+              </span>
+              <span class="file-drop-hint">PDF, DOCX, MD, TXT — ate 20 MB</span>
+            </label>
+
+            <div class="chunk-options">
+              <label class="chunk-label">
+                Tamanho do chunk
+                <input type="number" id="chunk-size" class="chunk-input" value="1000" min="200" max="4000" step="100" />
+              </label>
+              <label class="chunk-label">
+                Overlap
+                <input type="number" id="chunk-overlap" class="chunk-input" value="150" min="0" max="500" step="50" />
+              </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary" id="upload-btn" disabled>
+              <span class="btn-label">Importar</span>
+              <span class="btn-spinner hidden"></span>
+            </button>
+          </form>
+
+          <div id="upload-progress" class="upload-progress hidden"></div>
+        </section>
+
+        <!-- Knowledge base list -->
+        <section class="sidebar-section sidebar-section--grow">
+          <h2 class="section-title">
+            Base de conhecimento
+            <span id="doc-count" class="badge">0</span>
+          </h2>
+
+          <ul id="doc-list" class="doc-list"></ul>
+          <p id="doc-empty" class="empty-state">Nenhum conteudo na base ainda.</p>
+        </section>
+      </aside>
+
+      <main class="chat">
+        <div class="chat-messages" id="messages">
+          <div class="welcome">
+            <p class="welcome-title">Pronto para responder</p>
+            <p class="welcome-sub">
+              Adicione documentos ou importe arquivos ao lado e faca perguntas sobre eles.
+            </p>
+          </div>
+        </div>
+
+        <form class="chat-bar" id="query-form">
+          <input
+            type="text"
+            id="query-input"
+            class="chat-input"
+            placeholder="Faca uma pergunta sobre os documentos..."
+            autocomplete="off"
+          />
+          <button type="submit" class="btn btn-send" id="send-btn">Enviar</button>
+        </form>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

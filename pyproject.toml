@@ -1,16 +1,23 @@
 [project]
 name = "naive-rag"
-version = "0.1.0"
-description = "Naive RAG implementation"
+version = "0.2.0"
+description = "RAG com pgvector, FastAPI e streaming"
 requires-python = ">=3.12"
 dependencies = [
-    "groq>=0.32.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "psycopg2-binary>=2.9.10",
+    "python-multipart>=0.0.18",
+    "pypdf>=5.0.0",
+    "python-docx>=1.1.0",
+    "python-dotenv>=1.0.0",
     "numpy>=2.4.4",
     "ollama>=0.6.1",
-    "sentence-transformers>=5.3.0",
 ]
 
 [dependency-groups]
 dev = [
     "ipykernel>=7.2.0",
+    "groq>=0.32.0",
+    "sentence-transformers>=5.3.0",
 ]

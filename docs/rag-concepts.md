@@ -78,10 +78,10 @@ Na pratica os vetores tem centenas de dimensoes (este projeto usa 768), mas a id
 
 ### Como o Ollama gera embeddings neste projeto
 
-```typescript
-// src/embeddings.ts
-const res = await ollama.embeddings({ model: "embeddinggemma:latest", prompt: text });
-// res.embedding = [0.023, -0.415, 0.887, 0.102, ...]  ← 768 numeros
+```python
+# src/embeddings.py
+res = ollama.embeddings(model="embeddinggemma:latest", prompt=text)
+# res["embedding"] = [0.023, -0.415, 0.887, 0.102, ...]  ← 768 numeros
 ```
 
 O modelo le o texto e produz um vetor de 768 dimensoes. Esse vetor e armazenado na coluna `embedding vector(768)` do PostgreSQL.
@@ -110,21 +110,22 @@ Onde:
 | θ = 90° | → 0 | Vetores ortogonais — sem relacao semantica |
 | θ ≈ 180° | → -1 | Vetores opostos — sentidos contrarios |
 
-### Exemplo numerico em TypeScript
+### Exemplo numerico em Python
 
-```typescript
-function cosineSimilarity(a: number[], b: number[]): number {
-  const dot   = a.reduce((sum, ai, i) => sum + ai * b[i], 0);
-  const normA = Math.sqrt(a.reduce((sum, ai) => sum + ai * ai, 0));
-  const normB = Math.sqrt(b.reduce((sum, bi) => sum + bi * bi, 0));
-  return dot / (normA * normB);
-}
+```python
+import math
 
-const v1 = [1, 2, 3];
-const v2 = [4, 5, 6];
-// dot = 1×4 + 2×5 + 3×6 = 32
-// normA = √14 ≈ 3.742  |  normB = √77 ≈ 8.775
-// similaridade = 32 / (3.742 × 8.775) ≈ 0.974  ← muito similares
+def cosine_similarity(a: list[float], b: list[float]) -> float:
+    dot   = sum(ai * bi for ai, bi in zip(a, b))
+    norm_a = math.sqrt(sum(ai * ai for ai in a))
+    norm_b = math.sqrt(sum(bi * bi for bi in b))
+    return dot / (norm_a * norm_b)
+
+v1 = [1, 2, 3]
+v2 = [4, 5, 6]
+# dot = 1×4 + 2×5 + 3×6 = 32
+# norm_a = √14 ≈ 3.742  |  norm_b = √77 ≈ 8.775
+# similaridade = 32 / (3.742 × 8.775) ≈ 0.974  ← muito similares
 ```
 
 ### Por que cosseno e nao distancia euclidiana?

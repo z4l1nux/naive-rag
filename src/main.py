@@ -14,6 +14,7 @@ from .routes.documents import router as documents_router
 from .routes.query import router as query_router
 from .routes.upload import router as upload_router
 from . import turboquant
+from . import backend as backend_mod
 
 BASE_DIR = Path(__file__).parent.parent
 PUBLIC_DIR = BASE_DIR / "public"
@@ -61,6 +62,30 @@ def tq_get_metrics():
         "records": turboquant.get_metrics(),
         "summary": turboquant.get_summary(),
     }
+
+
+# ── Backend API ───────────────────────────────────────────────────────────────
+
+class BackendConfigRequest(BaseModel):
+    backend: str   # "ollama" | "llamacpp"
+
+
+@app.get("/api/backend/config")
+def backend_get_config():
+    """Return current inference backend and llama.cpp connection info."""
+    cfg = backend_mod.get_config()
+    cfg["llamacpp_host"]  = backend_mod.LLAMACPP_HOST
+    cfg["llamacpp_model"] = backend_mod.LLAMACPP_MODEL
+    return cfg
+
+
+@app.post("/api/backend/config")
+def backend_set_config(req: BackendConfigRequest):
+    """Switch inference backend between 'ollama' and 'llamacpp'."""
+    cfg = backend_mod.set_config(req.backend)
+    cfg["llamacpp_host"]  = backend_mod.LLAMACPP_HOST
+    cfg["llamacpp_model"] = backend_mod.LLAMACPP_MODEL
+    return cfg
 
 
 app.mount("/", StaticFiles(directory=str(PUBLIC_DIR), html=True), name="static")

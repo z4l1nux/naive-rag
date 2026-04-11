@@ -104,6 +104,18 @@
             <span class="tq-chevron" id="tq-chevron">▼</span>
           </button>
           <div class="tq-body hidden" id="tq-body">
+            <!-- Backend selector -->
+            <div class="tq-backend-row">
+              <span class="tq-backend-label">BACKEND</span>
+              <button class="tq-backend-btn tq-backend-btn--active" id="backend-ollama" type="button">Ollama</button>
+              <button class="tq-backend-btn" id="backend-llamacpp" type="button">llama.cpp</button>
+              <span class="tq-backend-note" id="backend-note">embeddings sempre via Ollama</span>
+            </div>
+            <!-- llama.cpp info banner -->
+            <div class="tq-llamacpp-info hidden" id="llamacpp-info">
+              <span class="tq-llamacpp-icon">⚙</span>
+              <span>KV Cache quantization real — configurada no startup do servidor via <code>--cache-type-k q4_0 --cache-type-v q4_0</code></span>
+            </div>
             <!-- Controls -->
             <div class="tq-controls">
               <button class="tq-toggle-btn" id="tq-toggle-btn" type="button">Desabilitado</button>
@@ -155,7 +167,7 @@
             <!-- Formula explainer -->
             <div class="tq-formula">
               <div class="tq-formula-title">Fórmula KV Cache (Gemma 3 12B)</div>
-              <div class="tq-formula-eq">tokens × 2 × 4096 (hidden) × 32 (layers) × bytes/valor</div>
+              <div class="tq-formula-eq">tokens × 2 × 2048 (hidden) × 48 (layers) × bytes/valor</div>
               <div class="tq-formula-modes">
                 <span class="tq-fp16">FP16 <b>2.0 B/val</b></span>
                 <span class="tq-8bit">8-bit <b>1.0 B/val (−50%)</b></span>

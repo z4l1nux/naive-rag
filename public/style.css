@@ -944,3 +944,73 @@ body {
 .tq-fp16  { color: #555e68; }
 .tq-8bit  { color: rgba(34, 211, 238, 0.6); }
 .tq-3bit  { color: rgba(167, 139, 250, 0.7); }
+
+/* ── Backend selector ────────────────────────────────────────────────── */
+
+.tq-backend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.tq-backend-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.tq-backend-btn {
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--elevated);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tq-backend-btn:hover { border-color: #7d8590; color: var(--text); }
+
+.tq-backend-btn--active {
+  border-color: rgba(47, 129, 247, 0.5);
+  background: rgba(47, 129, 247, 0.12);
+  color: #79c0ff;
+}
+
+.tq-backend-note {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.6;
+  margin-left: auto;
+}
+
+.tq-llamacpp-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: rgba(47, 129, 247, 0.07);
+  border: 1px solid rgba(47, 129, 247, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #79c0ff;
+  line-height: 1.5;
+}
+
+.tq-llamacpp-info code {
+  background: rgba(47, 129, 247, 0.15);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 10px;
+}
+
+.tq-llamacpp-info.hidden { display: none; }

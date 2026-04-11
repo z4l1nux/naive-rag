@@ -23,6 +23,8 @@ services:
       EMBED_MODEL: embeddinggemma:latest
       TEXT_MODEL: gemma4:latest
       EMBEDDING_DIM: "768"
+      LLAMACPP_HOST: http://host.docker.internal:8080
+      LLAMACPP_MODEL: gemma-3-12b
       PORT: "3001"
     ports:
       - "3001:3001"

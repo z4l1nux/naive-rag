@@ -24,15 +24,15 @@ tokens × 2 × hidden_dim × layers × bytes_per_value
 
 Onde:
 - `×2` — tensores K e V separados
-- `hidden_dim` — `head_dim(256) × num_kv_heads(16) = 4096` (Gemma 4 12B)
-- `layers` — 32 camadas transformer
+- `hidden_dim` — `head_dim(256) × num_kv_heads(8) = 2048` (`n_embd_k_gqa` real do Gemma 3 12B)
+- `layers` — 48 camadas transformer (8 non-SWA global + 40 SWA sliding window)
 - `bytes_per_value` — FP16=2.0 | 8-bit=1.0 | 3-bit≈0.375
 
 As constantes estao definidas em `src/turboquant.py`:
 
 ```python
-HIDDEN_DIM = 4096
-LAYERS     = 32
+HIDDEN_DIM = 2048   # head_dim(256) × num_kv_heads(8) = n_embd_k_gqa
+LAYERS     = 48     # 8 non-SWA + 40 SWA
 BYTES_FP16 = 2.0
 BYTES_8BIT = 1.0
 BYTES_3BIT = 0.375
@@ -79,6 +79,131 @@ Cada registro armazena os seguintes campos, extraidos diretamente do response do
 
 ---
 
+## Backend llama.cpp — quantizacao real da KV Cache
+
+O toggle "llama.cpp" na interface troca o backend de geracao de texto para o
+[llama-server](https://github.com/ggml-org/llama.cpp), que implementa quantizacao
+**real** dos tensores K e V via flags de startup — diferente do Ollama que apenas
+ajusta parametros de contexto/batch.
+
+> Os embeddings continuam sendo gerados pelo Ollama (`embeddinggemma:latest`)
+> independente do backend selecionado.
+
+---
+
+### 1. Instalar o llama.cpp
+
+```bash
+# Clonar e compilar (requer cmake e compilador C++)
+git clone https://github.com/ggml-org/llama.cpp
+cd llama.cpp
+cmake -B build -DGGML_CUDA=ON   # remova DGGML_CUDA=ON se nao tiver GPU NVIDIA
+cmake --build build --config Release -j$(nproc)
+```
+
+O binario gerado sera `build/bin/llama-server`.
+
+---
+
+### 2. Baixar o modelo GGUF do HuggingFace
+
+O modelo recomendado e o Gemma 3 12B IT com quantizacao QAT Q4_0 (oficial Google):
+
+```
+https://huggingface.co/google/gemma-3-12b-it-qat-q4_0-gguf
+```
+
+O repositorio e gated — aceite a licenca em
+`https://huggingface.co/google/gemma-3-12b-it-qat-q4_0-gguf` e faca login:
+
+```bash
+# huggingface-cli esta depreciado — use hf
+hf auth login   # crie um token Read em https://huggingface.co/settings/tokens
+
+# Baixar o modelo (~7 GB)
+hf download google/gemma-3-12b-it-qat-q4_0-gguf \
+  --repo-type model \
+  --include "*.gguf" \
+  --local-dir ./models/gemma-3-12b
+```
+
+Apos o download, verifique o nome exato:
+
+```bash
+ls ./models/gemma-3-12b/
+# gemma-3-12b-it-q4_0.gguf  mmproj-model-f16-12B.gguf
+```
+
+---
+
+### 3. Iniciar o llama-server com KV Cache quantizado
+
+O servidor deve escutar em `0.0.0.0` para que o container Docker acesse via
+`host.docker.internal`. O nome do arquivo GGUF e `gemma-3-12b-it-q4_0.gguf`
+(sem `qat` no nome apos o download):
+
+```bash
+# KV Cache Q4_0 — reducao real de ~75% vs FP16 (recomendado)
+./build/bin/llama-server \
+  --model ./models/gemma-3-12b/gemma-3-12b-it-q4_0.gguf \
+  --cache-type-k q4_0 \
+  --cache-type-v q4_0 \
+  --ctx-size 4096 \
+  --host 0.0.0.0 \
+  --port 8080
+
+# KV Cache Q8_0 — reducao de ~50%, maior qualidade
+./build/bin/llama-server \
+  --model ./models/gemma-3-12b/gemma-3-12b-it-q4_0.gguf \
+  --cache-type-k q8_0 \
+  --cache-type-v q8_0 \
+  --ctx-size 4096 \
+  --host 0.0.0.0 \
+  --port 8080
+```
+
+> Sem `--host 0.0.0.0` o servidor escuta apenas em `127.0.0.1` e o container
+> Docker nao consegue alcancar o servico via `host.docker.internal`.
+
+Tipos de quantizacao disponiveis para `--cache-type-k/v`:
+
+| Tipo | Bits | Reducao vs FP16 |
+|------|------|-----------------|
+| `f16` | 16 | baseline |
+| `q8_0` | 8 | ~50% |
+| `q4_0` | 4 | ~75% |
+| `q4_1` | 4+ | ~75% |
+| `iq4_nl` | 4 | ~75% (non-linear) |
+
+---
+
+### 4. Ativar o backend na interface
+
+Com o llama-server rodando na porta 8080, clique em **llama.cpp** no painel
+TurboQuant KV Cache. O host e modelo sao configurados pelas variaveis de ambiente:
+
+```env
+LLAMACPP_HOST=http://localhost:8080
+LLAMACPP_MODEL=gemma-3-12b
+```
+
+A API do llama-server e compativel com OpenAI (`/v1/chat/completions`), entao
+o campo `model` e apenas um label — o servidor usa o modelo carregado no startup.
+
+---
+
+### Comparacao das abordagens
+
+| | Ollama (TurboQuant) | llama.cpp |
+|---|---|---|
+| Quantizacao KV Cache | Simulada via params | Real (tensores K/V) |
+| Controle por request | Sim (num_ctx, num_batch) | Nao (fixo no startup) |
+| Medicao de memoria | Estimativa por formula | Estimativa por formula |
+| Setup | Zero (ja instalado) | Requer compilacao + download GGUF |
+| Embeddings | Ollama | Ollama (sempre) |
+
+---
+
 ## Endpoints da API
 
 | Metodo | Rota | Descricao |
@@ -86,6 +211,8 @@ Cada registro armazena os seguintes campos, extraidos diretamente do response do
 | `GET` | `/api/turboquant/config` | Retorna o modo atual (`enabled`, `mode`) |
 | `POST` | `/api/turboquant/config` | Altera o modo (`enabled: bool`, `mode: "off"\|"standard"\|"aggressive"`) |
 | `GET` | `/api/turboquant/metrics` | Retorna os ultimos 50 registros e as medias por modo |
+| `GET` | `/api/backend/config` | Retorna o backend ativo e host/model do llama.cpp |
+| `POST` | `/api/backend/config` | Alterna backend (`backend: "ollama"\|"llamacpp"`) |
 
 Exemplo de ativacao via curl:
 

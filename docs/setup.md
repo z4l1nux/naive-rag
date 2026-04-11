@@ -5,12 +5,14 @@
 | Ferramenta | Versao minima | Para que serve |
 |------------|--------------|----------------|
 | Docker + Compose | 24+ | Rodar API e PostgreSQL |
-| Ollama | qualquer | Rodar os modelos localmente |
-| uv (opcional) | qualquer | Apenas para desenvolvimento local sem Docker |
+| Ollama | qualquer | Embeddings e modelo de texto (backend padrao) |
+| llama.cpp | build recente | Backend alternativo com KV Cache quantizado (opcional) |
+| uv | qualquer | Apenas para desenvolvimento local sem Docker |
+| cmake + g++ | qualquer | Apenas para compilar o llama.cpp |
 
 ---
 
-## 1. Instalar o Ollama
+## 1. Ollama — backend padrao
 
 O Ollama roda fora do Docker, diretamente no host.
 
@@ -32,10 +34,10 @@ ollama serve
 ### Baixar os modelos
 
 ```bash
-# Modelo de embedding — converte texto em vetor numerico (768 dims)
-ollama pull embeddinggemma:latest
+# Modelo de embedding — sempre necessario, independente do backend de texto
+ollama pull embeddinggemma:latest   # 768 dims
 
-# Modelo de texto — gera a resposta final a partir do contexto
+# Modelo de texto — usado quando o backend Ollama estiver selecionado
 ollama pull gemma4:latest
 ```
 
@@ -46,21 +48,151 @@ ollama list
 # deve listar embeddinggemma:latest e gemma4:latest
 ```
 
-### Trocar de modelo
+### Trocar modelo de texto (Ollama)
 
 Altere as variaveis no `docker-compose.yml`:
 
 ```yaml
-EMBED_MODEL: nomic-embed-text   # outro modelo de embedding
-TEXT_MODEL: llama3.2            # outro modelo de texto
-EMBEDDING_DIM: "768"            # dimensoes do novo modelo de embedding
+TEXT_MODEL: llama3.2   # qualquer modelo disponivel no Ollama
 ```
 
-> Se trocar o modelo de embedding, o `EMBEDDING_DIM` deve bater com as dimensoes que o novo modelo produz. E necessario recriar o banco com `docker compose down -v`.
+### Trocar modelo de embedding
+
+```yaml
+EMBED_MODEL: nomic-embed-text
+EMBEDDING_DIM: "768"   # ajuste conforme o novo modelo
+```
+
+> Ao trocar o modelo de embedding e necessario recriar o banco: `docker compose down -v`.
 
 ---
 
-## 2. Rodar com Docker (recomendado)
+## 2. llama.cpp — backend com KV Cache real (opcional)
+
+O llama.cpp permite quantizacao **real** dos tensores K e V da KV Cache, diferente do
+Ollama que usa parametros de contexto como aproximacao. O backend e selecionado via
+toggle na interface — os dois podem coexistir.
+
+> Os embeddings continuam sendo gerados pelo Ollama independente do backend selecionado.
+
+### 2.1 Compilar o llama-server
+
+```bash
+# Dentro do diretorio do projeto (ou qualquer outro local)
+git clone https://github.com/ggml-org/llama.cpp
+cd llama.cpp
+
+# Sem GPU (CPU apenas)
+cmake -B build
+cmake --build build --config Release -j$(nproc)
+
+# Com GPU NVIDIA (requer CUDA toolkit instalado)
+cmake -B build -DGGML_CUDA=ON
+cmake --build build --config Release -j$(nproc)
+```
+
+O binario gerado sera `build/bin/llama-server`.
+
+### 2.2 Baixar o modelo GGUF
+
+O modelo recomendado e o Gemma 3 12B IT QAT Q4_0 (oficial Google, ~7 GB).
+O repositorio e gated — e necessario aceitar a licenca Gemma no HuggingFace
+e fazer login com um token antes de baixar.
+
+**Passo 1 — aceitar a licenca:**
+
+Acesse e clique em "Agree and access repository":
+`https://huggingface.co/google/gemma-3-12b-it-qat-q4_0-gguf`
+
+**Passo 2 — fazer login:**
+
+```bash
+# Criar token em: https://huggingface.co/settings/tokens (tipo: Read)
+hf auth login
+# Cole o token quando solicitado
+```
+
+**Passo 3 — baixar:**
+
+```bash
+# A partir do diretorio llama.cpp/
+hf download google/gemma-3-12b-it-qat-q4_0-gguf \
+  --repo-type model \
+  --include "*.gguf" \
+  --local-dir ./models/gemma-3-12b
+```
+
+Apos o download, verifique o nome exato do arquivo:
+
+```bash
+ls ./models/gemma-3-12b/
+# gemma-3-12b-it-q4_0.gguf  mmproj-model-f16-12B.gguf
+```
+
+### 2.3 Iniciar o llama-server
+
+O servidor deve escutar em `0.0.0.0` para que o container Docker acesse via
+`host.docker.internal`:
+
+```bash
+# KV Cache Q4_0 — reducao real de ~75% vs FP16 (recomendado)
+./build/bin/llama-server \
+  --model ./models/gemma-3-12b/gemma-3-12b-it-q4_0.gguf \
+  --cache-type-k q4_0 \
+  --cache-type-v q4_0 \
+  --ctx-size 4096 \
+  --host 0.0.0.0 \
+  --port 8080
+
+# KV Cache Q8_0 — reducao de ~50%, maior qualidade
+./build/bin/llama-server \
+  --model ./models/gemma-3-12b/gemma-3-12b-it-q4_0.gguf \
+  --cache-type-k q8_0 \
+  --cache-type-v q8_0 \
+  --ctx-size 4096 \
+  --host 0.0.0.0 \
+  --port 8080
+
+# FP16 — sem quantizacao KV Cache (baseline)
+./build/bin/llama-server \
+  --model ./models/gemma-3-12b/gemma-3-12b-it-q4_0.gguf \
+  --ctx-size 4096 \
+  --host 0.0.0.0 \
+  --port 8080
+```
+
+Tipos de quantizacao disponíveis para `--cache-type-k/v`:
+
+| Tipo | Bits | Reducao vs FP16 |
+|------|------|-----------------|
+| `f16` | 16 | baseline |
+| `q8_0` | 8 | ~50% |
+| `q4_0` | 4 | ~75% |
+| `iq4_nl` | 4 | ~75% (non-linear) |
+
+O servidor ficara disponivel em `http://localhost:8080`. A interface web em
+`http://localhost:8080` permite testar o modelo diretamente.
+
+### 2.4 Ativar o backend na interface
+
+Com o llama-server rodando, clique em **llama.cpp** no painel TurboQuant da
+interface RAG. A troca e instantanea e sem necessidade de reiniciar containers.
+
+Para configurar o endereco via variaveis de ambiente (`.env` ou `docker-compose.yml`):
+
+```env
+LLAMACPP_HOST=http://localhost:8080
+LLAMACPP_MODEL=gemma-3-12b
+```
+
+> O campo `LLAMACPP_MODEL` e apenas um label — o llama-server usa o modelo
+> carregado no startup independente do valor enviado na requisicao.
+
+---
+
+## 3. Rodar com Docker (recomendado)
+
+Com Ollama rodando no host:
 
 ```bash
 git clone <url>
@@ -68,7 +200,16 @@ cd naive-rag
 docker compose up --build
 ```
 
-Acesse `http://localhost:3000`.
+Acesse `http://localhost:3001`.
+
+### Reconstruir apos mudancas no codigo
+
+```bash
+docker compose up --build api -d
+```
+
+> `docker compose restart api` **nao** atualiza o codigo — os arquivos sao
+> copiados para dentro da imagem durante o build.
 
 ### Parar sem perder dados
 
@@ -77,32 +218,33 @@ docker compose down
 # ou Ctrl+C no terminal
 ```
 
-### Parar e remover tudo (incluindo dados)
+### Parar e remover tudo (incluindo dados do banco)
 
 ```bash
 docker compose down -v
 ```
 
-O `-v` remove o volume `pgdata`. Use apenas se quiser comecar do zero (necessario ao trocar o modelo de embedding).
+O `-v` remove o volume `pgdata`. Use apenas se quiser comecar do zero
+(necessario ao trocar o modelo de embedding).
 
 ---
 
-## 3. Desenvolvimento local (sem Docker)
+## 4. Desenvolvimento local (sem Docker)
 
-### 3.1 Instalar uv
+### 4.1 Instalar uv
 
 ```bash
 # Linux / macOS
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### 3.2 Subir apenas o Postgres
+### 4.2 Subir apenas o Postgres
 
 ```bash
 docker compose up postgres -d
 ```
 
-### 3.3 Instalar dependencias
+### 4.3 Instalar dependencias
 
 ```bash
 # Apenas dependencias de producao
@@ -112,34 +254,36 @@ uv sync
 uv sync --dev
 ```
 
-### 3.4 Configurar variaveis de ambiente
+### 4.4 Configurar variaveis de ambiente
 
 ```bash
 cp .env.example .env
 ```
 
-O `.env.example` ja vem com os valores corretos para o Postgres do Docker:
+O `.env.example` ja vem com os valores corretos:
 
 ```env
-DATABASE_URL=postgres://raguser:ragpass@localhost:5432/ragdb
+DATABASE_URL=postgres://raguser:ragpass@localhost:5433/ragdb
 OLLAMA_HOST=http://localhost:11434
 EMBED_MODEL=embeddinggemma:latest
 TEXT_MODEL=gemma4:latest
 EMBEDDING_DIM=768
-PORT=3000
+PORT=3001
+LLAMACPP_HOST=http://localhost:8080
+LLAMACPP_MODEL=gemma-3-12b
 ```
 
-### 3.5 Rodar a API
+### 4.5 Rodar a API
 
 ```bash
-uv run uvicorn src.main:app --reload --port 3000
+uv run uvicorn src.main:app --reload --port 3001
 ```
 
 O `--reload` reinicia o servidor automaticamente ao salvar qualquer arquivo em `src/`.
 
 ---
 
-## 4. Rodar o material educacional (notebook / script)
+## 5. Rodar o material educacional (notebook / script)
 
 ```bash
 # Instalar dependencias de dev (inclui ipykernel)
@@ -154,33 +298,40 @@ uv run python rag.py
 
 ---
 
-## 5. Variaveis de ambiente — referencia completa
+## 6. Variaveis de ambiente — referencia completa
 
 | Variavel | Padrao | Obrigatoria | Descricao |
 |----------|--------|-------------|-----------|
 | `DATABASE_URL` | — | Sim | Connection string PostgreSQL |
 | `OLLAMA_HOST` | `http://localhost:11434` | Nao | Endereco do servidor Ollama |
-| `EMBED_MODEL` | `embeddinggemma:latest` | Nao | Modelo de embedding |
-| `TEXT_MODEL` | `gemma4:latest` | Nao | Modelo de geracao de texto |
+| `EMBED_MODEL` | `embeddinggemma:latest` | Nao | Modelo de embedding (sempre Ollama) |
+| `TEXT_MODEL` | `gemma4:latest` | Nao | Modelo de texto do backend Ollama |
 | `EMBEDDING_DIM` | `768` | Nao | Dimensoes do vetor (deve bater com `EMBED_MODEL`) |
-| `PORT` | `3000` | Nao | Porta HTTP da API |
+| `LLAMACPP_HOST` | `http://localhost:8080` | Nao | Endereco do llama-server |
+| `LLAMACPP_MODEL` | `gemma-3-12b` | Nao | Label do modelo no llama-server |
+| `PORT` | `3001` | Nao | Porta HTTP da API |
 
 ---
 
-## 6. Como o Docker acessa o Ollama do host
+## 7. Como o Docker acessa servicos no host
 
-Em Linux, o container nao pode acessar `localhost` do host diretamente. O `docker-compose.yml` usa:
+Em Linux, containers nao acessam `localhost` do host diretamente. O `docker-compose.yml` usa:
 
 ```yaml
 extra_hosts:
   - "host.docker.internal:host-gateway"
 ```
 
-Isso mapeia `host.docker.internal` para o IP do host dentro da rede Docker. No macOS e Windows isso e automatico com Docker Desktop.
+Isso mapeia `host.docker.internal` para o IP do host dentro da rede Docker.
+No macOS e Windows isso e automatico com Docker Desktop.
+
+Isso afeta tanto o Ollama (`OLLAMA_HOST=http://host.docker.internal:11434`)
+quanto o llama-server (`LLAMACPP_HOST=http://host.docker.internal:8080`) —
+ambos devem escutar em `0.0.0.0` no host para serem acessiveis.
 
 ---
 
-## 7. Limites de arquivo no upload
+## 8. Limites de arquivo no upload
 
 O limite padrao e **20 MB** por arquivo, configurado em `src/routes/upload.py`:
 
@@ -188,4 +339,16 @@ O limite padrao e **20 MB** por arquivo, configurado em `src/routes/upload.py`:
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 ```
 
-PDFs com muitas paginas podem levar varios minutos — cada chunk exige uma chamada ao Ollama para gerar o embedding.
+PDFs com muitas paginas podem levar varios minutos — cada chunk exige uma
+chamada ao Ollama para gerar o embedding.
+
+---
+
+## 9. Ordem de inicializacao recomendada
+
+```
+1. ollama serve                    # host, terminal 1
+2. llama-server (se usar llama.cpp) # host, terminal 2
+3. docker compose up --build       # containers
+4. http://localhost:3001           # interface web
+```

@@ -26,11 +26,11 @@ _metrics: deque = deque(maxlen=50)   # ring buffer — no memory leak
 # ── Memory formula constants — Gemma 3 12B architecture ─────────────────────
 # tokens × 2 × hidden_dim × layers × bytes_per_value
 #   ×2         : separate K and V tensors
-#   hidden_dim : head_dim(256) × num_kv_heads(16) = 4096
-#   layers     : 32 transformer layers
+#   hidden_dim : head_dim(256) × num_kv_heads(8) = 2048  [n_embd_k_gqa]
+#   layers     : 48 transformer layers (8 non-SWA global + 40 SWA sliding)
 
-HIDDEN_DIM = 4096
-LAYERS     = 32
+HIDDEN_DIM = 2048
+LAYERS     = 48
 BYTES_FP16 = 2.0
 BYTES_8BIT = 1.0
 BYTES_3BIT = 0.375   # TurboQuant: 3 bits / 8 bits per byte

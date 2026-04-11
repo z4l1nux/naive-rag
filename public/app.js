@@ -8,10 +8,12 @@ const TQ_COLORS = {
   "TurboQuant": "#a78bfa",
 };
 
-let tqConfig  = { enabled: false, mode: "off" };
-let tqSaving  = false;
+let tqConfig      = { enabled: false, mode: "off" };
+let tqSaving      = false;
+let backendConfig = { backend: "ollama" };
 
 // DOM refs — resolved after DOMContentLoaded (called in init block at bottom)
+let backendOllamaBtn, backendLlamacppBtn, backendNote, llamacppInfo;
 let tqHeaderBtn, tqBody, tqChevron, tqBadge, tqLastHint;
 let tqToggleBtn, tqSavingEl;
 let tqModeStandard, tqModeAggressive;
@@ -154,7 +156,44 @@ function renderTqMetrics(record, summary) {
   }
 }
 
+async function applyBackendConfig(backend) {
+  try {
+    const res = await fetch("/api/backend/config", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ backend }),
+    });
+    backendConfig = await res.json();
+    updateBackendStyle();
+  } catch (e) {
+    console.error("Backend config error:", e);
+  }
+}
+
+function updateBackendStyle() {
+  const isLlama = backendConfig.backend === "llamacpp";
+  backendOllamaBtn.className  = isLlama ? "tq-backend-btn" : "tq-backend-btn tq-backend-btn--active";
+  backendLlamacppBtn.className = isLlama ? "tq-backend-btn tq-backend-btn--active" : "tq-backend-btn";
+  llamacppInfo.classList.toggle("hidden", !isLlama);
+  backendNote.textContent = isLlama
+    ? `${backendConfig.llamacpp_host} · embeddings via Ollama`
+    : "embeddings sempre via Ollama";
+}
+
 function initTurboQuant() {
+  backendOllamaBtn   = document.getElementById("backend-ollama");
+  backendLlamacppBtn = document.getElementById("backend-llamacpp");
+  backendNote        = document.getElementById("backend-note");
+  llamacppInfo       = document.getElementById("llamacpp-info");
+
+  backendOllamaBtn.addEventListener("click",   () => applyBackendConfig("ollama"));
+  backendLlamacppBtn.addEventListener("click", () => applyBackendConfig("llamacpp"));
+
+  fetch("/api/backend/config")
+    .then(r => r.json())
+    .then(data => { backendConfig = data; updateBackendStyle(); })
+    .catch(() => {});
+
   tqHeaderBtn      = document.getElementById("tq-header-btn");
   tqBody           = document.getElementById("tq-body");
   tqChevron        = document.getElementById("tq-chevron");

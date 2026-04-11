@@ -26,3 +26,13 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Modelos GGUF — arquivos grandes, nao versionar
+*.gguf
+models/
+
+# llama.cpp — repositorio clonado localmente, nao versionar
+llama.cpp/
+
+# HuggingFace cache
+.cache/huggingface/

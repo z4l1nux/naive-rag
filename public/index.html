@@ -92,6 +92,79 @@
           </div>
         </div>
 
+        <!-- TurboQuant KV Cache Panel -->
+        <div class="tq-panel" id="tq-panel">
+          <button class="tq-header" id="tq-header-btn" type="button">
+            <span class="tq-header-left">
+              <span class="tq-icon">⚡</span>
+              <span class="tq-title">TURBOQUANT KV CACHE</span>
+              <span class="tq-badge" id="tq-badge">OFF</span>
+              <span class="tq-last-hint" id="tq-last-hint"></span>
+            </span>
+            <span class="tq-chevron" id="tq-chevron">▼</span>
+          </button>
+          <div class="tq-body hidden" id="tq-body">
+            <!-- Controls -->
+            <div class="tq-controls">
+              <button class="tq-toggle-btn" id="tq-toggle-btn" type="button">Desabilitado</button>
+              <button class="tq-mode-btn" id="tq-mode-standard" data-mode="standard" type="button">Standard (8-bit)</button>
+              <button class="tq-mode-btn" id="tq-mode-aggressive" data-mode="aggressive" type="button">TurboQuant (3-bit)</button>
+              <span class="tq-saving hidden" id="tq-saving">salvando…</span>
+            </div>
+            <!-- Metric cards -->
+            <div class="tq-cards hidden" id="tq-cards">
+              <div class="tq-card tq-card--cyan">
+                <div class="tq-card-label">⏱ LATÊNCIA TOTAL</div>
+                <div class="tq-card-value" id="tq-val-latency">—</div>
+                <div class="tq-card-sub" id="tq-sub-latency"></div>
+              </div>
+              <div class="tq-card tq-card--green">
+                <div class="tq-card-label">↑ TOKENS/SEG</div>
+                <div class="tq-card-value" id="tq-val-tps">—</div>
+                <div class="tq-card-sub" id="tq-sub-tps"></div>
+              </div>
+              <div class="tq-card tq-card--orange">
+                <div class="tq-card-label">⚡ PROMPT EVAL</div>
+                <div class="tq-card-value" id="tq-val-prompt">—</div>
+                <div class="tq-card-sub" id="tq-sub-prompt"></div>
+              </div>
+              <div class="tq-card tq-card--purple">
+                <div class="tq-card-label">💾 KV MEMORY</div>
+                <div class="tq-card-value" id="tq-val-mem">—</div>
+                <div class="tq-card-sub" id="tq-sub-mem"></div>
+              </div>
+            </div>
+            <!-- Comparison charts -->
+            <div class="tq-section-title" id="tq-chart-title" style="display:none">
+              COMPARAÇÃO DE MODOS — <span id="tq-inference-count">0</span> inferência(s)
+            </div>
+            <div class="tq-charts hidden" id="tq-charts">
+              <div class="tq-chart-wrap">
+                <div class="tq-chart-label">Latência média (ms) — menor é melhor</div>
+                <div class="tq-bar-chart" id="tq-chart-latency"></div>
+              </div>
+              <div class="tq-chart-wrap">
+                <div class="tq-chart-label">Tokens/seg médio — maior é melhor</div>
+                <div class="tq-bar-chart" id="tq-chart-tps"></div>
+              </div>
+              <div class="tq-chart-wrap">
+                <div class="tq-chart-label">KV Cache médio (MB) — menor é melhor</div>
+                <div class="tq-bar-chart" id="tq-chart-mem"></div>
+              </div>
+            </div>
+            <!-- Formula explainer -->
+            <div class="tq-formula">
+              <div class="tq-formula-title">Fórmula KV Cache (Gemma 3 12B)</div>
+              <div class="tq-formula-eq">tokens × 2 × 4096 (hidden) × 32 (layers) × bytes/valor</div>
+              <div class="tq-formula-modes">
+                <span class="tq-fp16">FP16 <b>2.0 B/val</b></span>
+                <span class="tq-8bit">8-bit <b>1.0 B/val (−50%)</b></span>
+                <span class="tq-3bit">3-bit <b>0.375 B/val (−73%)</b></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <form class="chat-bar" id="query-form">
           <input
             type="text"

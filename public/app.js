@@ -1,3 +1,210 @@
+/* ── TurboQuant ──────────────────────────────────────────────────────
+ * State, config, DOM refs and chart rendering for the TQ KV Cache panel.
+ * ──────────────────────────────────────────────────────────────────── */
+
+const TQ_COLORS = {
+  "TQ OFF":     "#6b7280",
+  "Standard":   "#22d3ee",
+  "TurboQuant": "#a78bfa",
+};
+
+let tqConfig  = { enabled: false, mode: "off" };
+let tqSaving  = false;
+
+// DOM refs — resolved after DOMContentLoaded (called in init block at bottom)
+let tqHeaderBtn, tqBody, tqChevron, tqBadge, tqLastHint;
+let tqToggleBtn, tqSavingEl;
+let tqModeStandard, tqModeAggressive;
+let tqCards;
+let tqChartTitle, tqInferenceCount, tqCharts;
+let tqValLatency, tqSubLatency, tqValTps, tqSubTps;
+let tqValPrompt, tqSubPrompt, tqValMem, tqSubMem;
+let tqChartLatency, tqChartTps, tqChartMem;
+
+function fmtMs(ms) {
+  if (ms === null || ms === undefined || ms === 0) return "—";
+  return ms >= 1000 ? `${(ms / 1000).toFixed(2)}s` : `${ms}ms`;
+}
+
+function fmtBytes(bytes) {
+  if (!bytes || bytes === 0) return "0 B";
+  if (bytes < 1024)        return `${bytes} B`;
+  if (bytes < 1024 ** 2)   return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 ** 3)   return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+}
+
+function buildBarChart(container, series) {
+  container.innerHTML = "";
+  const values = series.map(s => s.value || 0);
+  const maxVal = Math.max(...values, 1);
+
+  for (const { label, value, unit } of series) {
+    const pct   = Math.max((value / maxVal) * 100, 2);
+    const color = TQ_COLORS[label] ?? "#22d3ee";
+
+    const col = document.createElement("div");
+    col.className = "tq-bar-col";
+
+    const valEl = document.createElement("span");
+    valEl.className = "tq-bar-val";
+    valEl.textContent = value ? `${value}${unit ?? ""}` : "—";
+
+    const bar = document.createElement("div");
+    bar.className = "tq-bar";
+    bar.style.height = `${pct}%`;
+    bar.style.background = color;
+
+    const labelEl = document.createElement("span");
+    labelEl.className = "tq-bar-label";
+    labelEl.textContent = label;
+
+    col.appendChild(valEl);
+    col.appendChild(bar);
+    col.appendChild(labelEl);
+    container.appendChild(col);
+  }
+}
+
+function updateTqBadgeStyle() {
+  tqBadge.textContent = tqConfig.enabled
+    ? { standard: "Standard 8-bit", aggressive: "TurboQuant 3-bit" }[tqConfig.mode] ?? tqConfig.mode
+    : "OFF";
+  tqBadge.className = tqConfig.enabled ? "tq-badge tq-badge--on" : "tq-badge";
+  tqToggleBtn.textContent   = tqConfig.enabled ? "Habilitado" : "Desabilitado";
+  tqToggleBtn.className     = tqConfig.enabled
+    ? "tq-toggle-btn tq-toggle-btn--on"
+    : "tq-toggle-btn";
+  tqModeStandard.className  = tqConfig.enabled && tqConfig.mode === "standard"
+    ? "tq-mode-btn tq-mode-btn--active-cyan"
+    : "tq-mode-btn";
+  tqModeAggressive.className = tqConfig.enabled && tqConfig.mode === "aggressive"
+    ? "tq-mode-btn tq-mode-btn--active-purple"
+    : "tq-mode-btn";
+}
+
+async function applyTqConfig(enabled, mode) {
+  if (tqSaving) return;
+  tqSaving = true;
+  tqSavingEl.classList.remove("hidden");
+  try {
+    const res  = await fetch("/api/turboquant/config", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ enabled, mode }),
+    });
+    tqConfig = await res.json();
+    updateTqBadgeStyle();
+  } catch (e) {
+    console.error("TurboQuant config error:", e);
+  } finally {
+    tqSaving = false;
+    tqSavingEl.classList.add("hidden");
+  }
+}
+
+function renderTqMetrics(record, summary) {
+  // Live metric cards
+  tqCards.classList.remove("hidden");
+  tqValLatency.textContent = fmtMs(record.total_ms);
+  tqSubLatency.textContent = `eval: ${fmtMs(record.eval_ms)}`;
+  tqValTps.textContent     = `${record.tokens_per_sec}`;
+  tqSubTps.textContent     = `${record.gen_tokens} tokens gen`;
+  tqValPrompt.textContent  = fmtMs(record.prompt_eval_ms);
+  tqSubPrompt.textContent  = `${record.prompt_tokens} tokens`;
+  tqValMem.textContent     = fmtBytes(record.kv_bytes);
+  tqSubMem.textContent     = `${record.memory_reduction}% vs FP16`;
+
+  // Update last hint in header
+  tqLastHint.textContent = `${fmtMs(record.total_ms)} · ${record.tokens_per_sec} t/s`;
+
+  // Comparison charts
+  const total = Object.values(summary)
+    .filter(Boolean)
+    .reduce((acc, s) => acc + s.count, 0);
+  tqInferenceCount.textContent = total;
+  tqChartTitle.style.display = total > 0 ? "" : "none";
+
+  if (total > 0) {
+    tqCharts.classList.remove("hidden");
+
+    buildBarChart(tqChartLatency, [
+      { label: "TQ OFF",      value: summary.off?.avg_total_ms        ?? 0, unit: "ms" },
+      { label: "Standard",    value: summary.standard?.avg_total_ms   ?? 0, unit: "ms" },
+      { label: "TurboQuant",  value: summary.aggressive?.avg_total_ms ?? 0, unit: "ms" },
+    ]);
+
+    buildBarChart(tqChartTps, [
+      { label: "TQ OFF",      value: summary.off?.avg_tokens_per_sec        ?? 0, unit: "t/s" },
+      { label: "Standard",    value: summary.standard?.avg_tokens_per_sec   ?? 0, unit: "t/s" },
+      { label: "TurboQuant",  value: summary.aggressive?.avg_tokens_per_sec ?? 0, unit: "t/s" },
+    ]);
+
+    buildBarChart(tqChartMem, [
+      { label: "TQ OFF",
+        value: summary.off?.avg_kv_bytes ? Math.round(summary.off.avg_kv_bytes / 1024 / 1024) : 0,
+        unit: "MB" },
+      { label: "Standard",
+        value: summary.standard?.avg_kv_bytes ? Math.round(summary.standard.avg_kv_bytes / 1024 / 1024) : 0,
+        unit: "MB" },
+      { label: "TurboQuant",
+        value: summary.aggressive?.avg_kv_bytes ? Math.round(summary.aggressive.avg_kv_bytes / 1024 / 1024) : 0,
+        unit: "MB" },
+    ]);
+  }
+}
+
+function initTurboQuant() {
+  tqHeaderBtn      = document.getElementById("tq-header-btn");
+  tqBody           = document.getElementById("tq-body");
+  tqChevron        = document.getElementById("tq-chevron");
+  tqBadge          = document.getElementById("tq-badge");
+  tqLastHint       = document.getElementById("tq-last-hint");
+  tqToggleBtn      = document.getElementById("tq-toggle-btn");
+  tqSavingEl       = document.getElementById("tq-saving");
+  tqModeStandard   = document.getElementById("tq-mode-standard");
+  tqModeAggressive = document.getElementById("tq-mode-aggressive");
+  tqCards          = document.getElementById("tq-cards");
+  tqChartTitle     = document.getElementById("tq-chart-title");
+  tqInferenceCount = document.getElementById("tq-inference-count");
+  tqCharts         = document.getElementById("tq-charts");
+  tqValLatency     = document.getElementById("tq-val-latency");
+  tqSubLatency     = document.getElementById("tq-sub-latency");
+  tqValTps         = document.getElementById("tq-val-tps");
+  tqSubTps         = document.getElementById("tq-sub-tps");
+  tqValPrompt      = document.getElementById("tq-val-prompt");
+  tqSubPrompt      = document.getElementById("tq-sub-prompt");
+  tqValMem         = document.getElementById("tq-val-mem");
+  tqSubMem         = document.getElementById("tq-sub-mem");
+  tqChartLatency   = document.getElementById("tq-chart-latency");
+  tqChartTps       = document.getElementById("tq-chart-tps");
+  tqChartMem       = document.getElementById("tq-chart-mem");
+
+  // Expand/collapse
+  tqHeaderBtn.addEventListener("click", () => {
+    const open = tqBody.classList.toggle("hidden");
+    tqChevron.textContent = open ? "▼" : "▲";
+  });
+
+  // Toggle enable/disable
+  tqToggleBtn.addEventListener("click", () => {
+    const next     = !tqConfig.enabled;
+    const nextMode = next ? (tqConfig.mode === "off" ? "standard" : tqConfig.mode) : "off";
+    applyTqConfig(next, nextMode);
+  });
+
+  // Mode buttons
+  document.querySelectorAll(".tq-mode-btn").forEach(btn => {
+    btn.addEventListener("click", () => applyTqConfig(true, btn.dataset.mode));
+  });
+
+  // Load saved config from server
+  fetch("/api/turboquant/config")
+    .then(r => r.json())
+    .then(data => { tqConfig = data; updateTqBadgeStyle(); })
+    .catch(() => {});
+}
+
 /* ── DOM refs ───────────────────────────────────────────────────────── */
 
 const addForm      = document.getElementById("add-doc-form");
@@ -357,6 +564,10 @@ async function sendQuery(question) {
           scrollToBottom();
         }
 
+        if (event.type === "metrics") {
+          renderTqMetrics(event.record, event.summary);
+        }
+
         if (event.type === "error") {
           cursor.remove();
           bubble.textContent = event.message;
@@ -437,3 +648,4 @@ function scrollToBottom() {
 /* ── Init ────────────────────────────────────────────────────────────── */
 
 loadKnowledgeBase();
+initTurboQuant();

@@ -20,7 +20,7 @@ Pipeline RAG (Retrieval-Augmented Generation) completo com banco de dados vetori
 
 ```bash
 ollama pull embeddinggemma:latest
-ollama pull gemma4:e2b
+ollama pull gemma4:latest
 ```
 
 **Subir tudo:**
@@ -43,7 +43,7 @@ Acesse `http://localhost:3000`. Adicione documentos ou importe arquivos e faca p
 | API | FastAPI + uvicorn com StreamingResponse (SSE) |
 | Banco vetorial | PostgreSQL 17 + pgvector (HNSW) |
 | Embeddings | Ollama (`embeddinggemma:latest`, 768 dims) |
-| Gerador de texto | Ollama (`gemma4:e2b`) |
+| Gerador de texto | Ollama (`gemma4:latest`) |
 | Containers | Docker Compose |
 | Parsers de arquivo | `pypdf`, `python-docx` |
 
@@ -91,7 +91,7 @@ cp .env.example .env
 | `DATABASE_URL` | `postgres://...` | Connection string do PostgreSQL |
 | `OLLAMA_HOST` | `http://localhost:11434` | Endereco do servidor Ollama |
 | `EMBED_MODEL` | `embeddinggemma:latest` | Modelo de embedding |
-| `TEXT_MODEL` | `gemma4:e2b` | Modelo gerador de texto |
+| `TEXT_MODEL` | `gemma4:latest` | Modelo gerador de texto |
 | `EMBEDDING_DIM` | `768` | Dimensoes do vetor (deve bater com o modelo) |
 | `PORT` | `3000` | Porta da API |
 
@@ -124,6 +124,7 @@ uv run uvicorn src.main:app --reload --port 3000
 | [Configuracao](docs/setup.md) | Docker, Ollama, Postgres, desenvolvimento local |
 | [Chunking](docs/chunking.md) | Estrategia de divisao de texto, parametros, trade-offs |
 | [API](docs/api.md) | Referencia completa dos endpoints |
+| [TurboQuant KV Cache](docs/turboquant.md) | Modos de quantizacao, formula de memoria, grafico de comparacao e endpoints |
 
 ---
 

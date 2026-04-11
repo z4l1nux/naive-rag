@@ -36,14 +36,14 @@ ollama serve
 ollama pull embeddinggemma:latest
 
 # Modelo de texto — gera a resposta final a partir do contexto
-ollama pull gemma4:e2b
+ollama pull gemma4:latest
 ```
 
 Para verificar:
 
 ```bash
 ollama list
-# deve listar embeddinggemma:latest e gemma4:e2b
+# deve listar embeddinggemma:latest e gemma4:latest
 ```
 
 ### Trocar de modelo
@@ -124,7 +124,7 @@ O `.env.example` ja vem com os valores corretos para o Postgres do Docker:
 DATABASE_URL=postgres://raguser:ragpass@localhost:5432/ragdb
 OLLAMA_HOST=http://localhost:11434
 EMBED_MODEL=embeddinggemma:latest
-TEXT_MODEL=gemma4:e2b
+TEXT_MODEL=gemma4:latest
 EMBEDDING_DIM=768
 PORT=3000
 ```
@@ -161,7 +161,7 @@ uv run python rag.py
 | `DATABASE_URL` | — | Sim | Connection string PostgreSQL |
 | `OLLAMA_HOST` | `http://localhost:11434` | Nao | Endereco do servidor Ollama |
 | `EMBED_MODEL` | `embeddinggemma:latest` | Nao | Modelo de embedding |
-| `TEXT_MODEL` | `gemma4:e2b` | Nao | Modelo de geracao de texto |
+| `TEXT_MODEL` | `gemma4:latest` | Nao | Modelo de geracao de texto |
 | `EMBEDDING_DIM` | `768` | Nao | Dimensoes do vetor (deve bater com `EMBED_MODEL`) |
 | `PORT` | `3000` | Nao | Porta HTTP da API |
 

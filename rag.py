@@ -24,7 +24,7 @@ documents = [
 # Constantes com os nomes dos modelos usados.
 # Separar em constantes facilita trocar o modelo em um único lugar.
 EMBED_MODEL = "embeddinggemma:latest"  # modelo para gerar embeddings (vetores numéricos de texto)
-TEXT_MODEL = "gemma4:e2b"              # modelo para gerar a resposta final em linguagem natural
+TEXT_MODEL = "gemma4:latest"           # modelo para gerar a resposta final em linguagem natural
 
 # Gera os embeddings de todos os documentos da base de conhecimento.
 # Um embedding é uma lista de números que representa o "significado" de um texto.

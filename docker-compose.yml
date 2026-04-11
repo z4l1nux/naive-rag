@@ -21,7 +21,7 @@ services:
       DATABASE_URL: postgres://raguser:ragpass@postgres:5432/ragdb
       OLLAMA_HOST: http://host.docker.internal:11434
       EMBED_MODEL: embeddinggemma:latest
-      TEXT_MODEL: gemma4:e2b
+      TEXT_MODEL: gemma4:latest
       EMBEDDING_DIM: "768"
       PORT: "3001"
     ports:

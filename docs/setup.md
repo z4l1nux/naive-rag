@@ -48,6 +48,23 @@ ollama list
 # deve listar embeddinggemma:latest e gemma4:latest
 ```
 
+### Quantizacao da KV Cache no Ollama (opcional)
+
+O Ollama suporta quantizacao nativa da KV Cache via variavel de ambiente do servidor.
+Defina antes de iniciar `ollama serve`:
+
+```bash
+# 4-bit — reducao de ~75% vs FP16, maior economia de VRAM
+OLLAMA_KV_CACHE_TYPE=q4_0 ollama serve
+
+# 8-bit — reducao de ~50% vs FP16, melhor qualidade
+OLLAMA_KV_CACHE_TYPE=q8_0 ollama serve
+```
+
+> Isso e diferente do TurboQuant: o Ollama aplica quantizacao simples (4 ou 8 bits)
+> nos tensores K/V a nivel de servidor. O TurboQuant ajusta parametros de contexto/batch
+> por requisicao para simular diferentes niveis de compressao.
+
 ### Trocar modelo de texto (Ollama)
 
 Altere as variaveis no `docker-compose.yml`:

@@ -42,7 +42,8 @@ function buildBarChart(container, series) {
   const maxVal = Math.max(...values, 1);
 
   for (const { label, value, unit } of series) {
-    const pct   = Math.max((value / maxVal) * 100, 2);
+    const hasData = value !== null && value !== undefined;
+    const pct   = Math.max(((hasData ? value : 0) / maxVal) * 100, 2);
     const color = TQ_COLORS[label] ?? "#22d3ee";
 
     const col = document.createElement("div");
@@ -50,7 +51,7 @@ function buildBarChart(container, series) {
 
     const valEl = document.createElement("span");
     valEl.className = "tq-bar-val";
-    valEl.textContent = value ? `${value}${unit ?? ""}` : "—";
+    valEl.textContent = hasData ? `${value}${unit ?? ""}` : "—";
 
     const bar = document.createElement("div");
     bar.className = "tq-bar";
@@ -143,15 +144,9 @@ function renderTqMetrics(record, summary) {
     ]);
 
     buildBarChart(tqChartMem, [
-      { label: "TQ OFF",
-        value: summary.off?.avg_kv_bytes ? Math.round(summary.off.avg_kv_bytes / 1024 / 1024) : 0,
-        unit: "MB" },
-      { label: "Standard",
-        value: summary.standard?.avg_kv_bytes ? Math.round(summary.standard.avg_kv_bytes / 1024 / 1024) : 0,
-        unit: "MB" },
-      { label: "TurboQuant",
-        value: summary.aggressive?.avg_kv_bytes ? Math.round(summary.aggressive.avg_kv_bytes / 1024 / 1024) : 0,
-        unit: "MB" },
+      { label: "TQ OFF",     value: summary.off        != null ? Math.round((100 - summary.off.avg_memory_reduction)        * 10) / 10 : null, unit: "%" },
+      { label: "Standard",   value: summary.standard   != null ? Math.round((100 - summary.standard.avg_memory_reduction)   * 10) / 10 : null, unit: "%" },
+      { label: "TurboQuant", value: summary.aggressive != null ? Math.round((100 - summary.aggressive.avg_memory_reduction) * 10) / 10 : null, unit: "%" },
     ]);
   }
 }

@@ -194,13 +194,40 @@ o campo `model` e apenas um label — o servidor usa o modelo carregado no start
 
 ### Comparacao das abordagens
 
-| | Ollama (TurboQuant) | llama.cpp |
-|---|---|---|
-| Quantizacao KV Cache | Simulada via params | Real (tensores K/V) |
-| Controle por request | Sim (num_ctx, num_batch) | Nao (fixo no startup) |
-| Medicao de memoria | Estimativa por formula | Estimativa por formula |
-| Setup | Zero (ja instalado) | Requer compilacao + download GGUF |
-| Embeddings | Ollama | Ollama (sempre) |
+| | Ollama (TurboQuant) | Ollama (`KV_CACHE_TYPE`) | llama.cpp |
+|---|---|---|---|
+| Quantizacao KV Cache | Simulada via params | Nativa (server-level) | Real (tensores K/V) |
+| Controle por request | Sim (num_ctx, num_batch) | Nao (fixo no startup) | Nao (fixo no startup) |
+| Como configurar | Toggle na UI | Env var antes do `ollama serve` | Flag `--cache-type-k/v` |
+| Medicao de memoria | Estimativa por formula | Estimativa por formula | Estimativa por formula |
+| Setup | Zero | Reiniciar Ollama | Compilacao + download GGUF |
+| Embeddings | Ollama | Ollama | Ollama (sempre) |
+
+---
+
+## Quantizacao nativa do Ollama (OLLAMA_KV_CACHE_TYPE)
+
+O Ollama suporta quantizacao real da KV Cache a nivel de servidor via variavel de ambiente.
+Diferente do TurboQuant (que ajusta parametros por request), isso aplica quantizacao diretamente
+nos tensores K e V durante toda a inferencia.
+
+```bash
+# 4-bit (~75% reducao de VRAM vs FP16)
+OLLAMA_KV_CACHE_TYPE=q4_0 ollama serve
+
+# 8-bit (~50% reducao, maior qualidade)
+OLLAMA_KV_CACHE_TYPE=q8_0 ollama serve
+```
+
+| Tipo | Bits | Reducao vs FP16 |
+|------|------|-----------------|
+| `f16` (padrao) | 16 | baseline |
+| `q8_0` | 8 | ~50% |
+| `q4_0` | 4 | ~75% |
+
+> Para usar junto com esta aplicacao: defina a variavel antes de iniciar `ollama serve`
+> e deixe o backend selecionado como **Ollama**. O TurboQuant continua funcionando
+> normalmente — os parametros de contexto/batch sao complementares.
 
 ---
 

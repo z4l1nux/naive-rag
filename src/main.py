@@ -15,6 +15,7 @@ from .routes.query import router as query_router
 from .routes.upload import router as upload_router
 from . import turboquant
 from . import backend as backend_mod
+from . import reranker as reranker_mod
 
 BASE_DIR = Path(__file__).parent.parent
 PUBLIC_DIR = BASE_DIR / "public"
@@ -86,6 +87,41 @@ def backend_set_config(req: BackendConfigRequest):
     cfg["llamacpp_host"]  = backend_mod.LLAMACPP_HOST
     cfg["llamacpp_model"] = backend_mod.LLAMACPP_MODEL
     return cfg
+
+
+# ── Reranker API ──────────────────────────────────────────────────────────────
+
+class RerankerConfigRequest(BaseModel):
+    enabled: bool
+    top_n: int = 10
+    top_k: int = 3
+
+
+@app.get("/api/reranker/config")
+def reranker_get_config():
+    """Return current reranker state (enabled, top_n, top_k)."""
+    return reranker_mod.get_config()
+
+
+@app.post("/api/reranker/config")
+def reranker_set_config(req: RerankerConfigRequest):
+    """Enable/disable cross-encoder reranking and set top_n / top_k."""
+    if req.top_n <= req.top_k:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=422, detail="top_n must be greater than top_k")
+    if req.top_n < 1 or req.top_k < 1:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=422, detail="top_n and top_k must be positive")
+    return reranker_mod.set_config(req.enabled, req.top_n, req.top_k)
+
+
+@app.get("/api/reranker/metrics")
+def reranker_get_metrics():
+    """Return the last 50 reranking records plus aggregate summary."""
+    return {
+        "records": reranker_mod.get_metrics(),
+        "summary": reranker_mod.get_summary(),
+    }
 
 
 app.mount("/", StaticFiles(directory=str(PUBLIC_DIR), html=True), name="static")

@@ -64,7 +64,7 @@ def get_options() -> dict:
     if mode == "standard":
         return {"num_ctx": 4096, "num_batch": 256}
     elif mode == "aggressive":
-        return {"num_ctx": 4096, "num_batch": 512, "num_keep": 5}
+        return {"num_ctx": 4096, "num_batch": 512}
     return {}
 
 

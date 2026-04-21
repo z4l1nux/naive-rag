@@ -1,6 +1,6 @@
 # API Reference
 
-Base URL: `http://localhost:3000`
+Base URL: `http://localhost:3001`
 
 ---
 
@@ -105,7 +105,7 @@ Remove todos os chunks de um arquivo importado.
 
 ```bash
 # exemplo
-curl -X DELETE "http://localhost:3000/api/documents/files/relatorio%20anual.pdf"
+curl -X DELETE "http://localhost:3001/api/documents/files/relatorio%20anual.pdf"
 ```
 
 **Resposta `200`**
@@ -138,7 +138,7 @@ Importa um arquivo, divide em chunks, gera embeddings e armazena tudo no banco.
 
 ```bash
 # exemplo com curl
-curl -X POST http://localhost:3000/api/upload \
+curl -X POST http://localhost:3001/api/upload \
   -F "file=@/caminho/para/documento.pdf" \
   -F "chunkSize=800" \
   -F "overlap=100"
@@ -210,7 +210,7 @@ data: {"type":"token","content":"learning "}
 data: {"type":"token","content":"e um..."}
 ```
 
-**Evento `sources`** — enviado uma vez ao final, com as fontes consultadas:
+**Evento `sources`** — enviado uma vez ao final, com as fontes consultadas (ja rerankeadas se o reranker estiver ativo):
 
 ```
 data: {"type":"sources","sources":[
@@ -218,6 +218,45 @@ data: {"type":"sources","sources":[
   {"id":5,"content":"O aprendizado pode...","source_file":null,"similarity":0.8714},
   {"id":3,"content":"Aplicacoes incluem...","source_file":"manual.pdf","similarity":0.8012}
 ]}
+```
+
+**Evento `reranker`** — enviado apos `sources` quando o reranker esta habilitado:
+
+```
+data: {"type":"reranker",
+  "record": {
+    "query": "O que e machine learning?",
+    "latency_ms": 412.3,
+    "num_candidates": 10,
+    "top_k": 3,
+    "rank_changes": [
+      {"id": 3, "from": 5, "to": 0},
+      {"id": 1, "from": 1, "to": 1}
+    ],
+    "avg_rank_improvement": 3.5
+  },
+  "summary": {
+    "count": 1,
+    "avg_latency_ms": 412.3,
+    "avg_rank_improvement": 3.5
+  }
+}
+```
+
+**Evento `metrics`** — enviado ao final com metricas de performance TurboQuant:
+
+```
+data: {"type":"metrics",
+  "record": {
+    "mode": "aggressive",
+    "total_ms": 4210.5,
+    "tokens_per_sec": 17.4,
+    "prompt_eval_ms": 348.1,
+    "kv_bytes": 12345678,
+    "memory_reduction": 73.1
+  },
+  "summary": { "off": {...}, "standard": {...}, "aggressive": {...} }
+}
 ```
 
 **Evento `error`** — enviado em caso de falha:
@@ -251,9 +290,11 @@ while (true) {
     if (!line.startsWith("data: ")) continue;
     const event = JSON.parse(line.slice(6));
 
-    if (event.type === "token")   console.log(event.content);
-    if (event.type === "sources") console.log("Fontes:", event.sources);
-    if (event.type === "error")   console.error(event.message);
+    if (event.type === "token")    console.log(event.content);
+    if (event.type === "sources")  console.log("Fontes:", event.sources);
+    if (event.type === "reranker") console.log("Reranker:", event.record);
+    if (event.type === "metrics")  console.log("TurboQuant:", event.record);
+    if (event.type === "error")    console.error(event.message);
   }
 }
 ```
@@ -261,7 +302,7 @@ while (true) {
 ### Consumindo o stream com curl
 
 ```bash
-curl -N -X POST http://localhost:3000/api/query \
+curl -N -X POST http://localhost:3001/api/query \
   -H "Content-Type: application/json" \
   -d '{"question":"O que e machine learning?","topK":3}'
 ```
@@ -271,6 +312,127 @@ curl -N -X POST http://localhost:3000/api/query \
 | Status | Motivo |
 |--------|--------|
 | `400` | `question` ausente ou vazio |
+
+---
+
+---
+
+## Reranker
+
+### `GET /api/reranker/config`
+
+Retorna a configuracao atual do reranker.
+
+**Resposta `200`**
+
+```json
+{ "enabled": false, "top_n": 10, "top_k": 3 }
+```
+
+---
+
+### `POST /api/reranker/config`
+
+Atualiza a configuracao do reranker.
+
+**Body `application/json`**
+
+```json
+{ "enabled": true, "top_n": 10, "top_k": 3 }
+```
+
+| Campo | Tipo | Descricao |
+|-------|------|-----------|
+| `enabled` | boolean | Liga/desliga o reranker |
+| `top_n` | integer | Candidatos buscados no pgvector (deve ser > `top_k`) |
+| `top_k` | integer | Chunks finais passados ao LLM |
+
+**Erros**
+
+| Status | Motivo |
+|--------|--------|
+| `422` | `top_n` <= `top_k` |
+
+---
+
+### `GET /api/reranker/metrics`
+
+Retorna o historico de metricas do reranker (ultimas 50 inferencias, ring buffer).
+
+**Resposta `200`**
+
+```json
+[
+  {
+    "query": "O que e machine learning?",
+    "latency_ms": 412.3,
+    "num_candidates": 10,
+    "top_k": 3,
+    "rank_changes": [{"id": 3, "from": 5, "to": 0}],
+    "avg_rank_improvement": 3.5
+  }
+]
+```
+
+---
+
+## TurboQuant KV Cache
+
+### `GET /api/turboquant/config`
+
+Retorna a configuracao atual do TurboQuant.
+
+**Resposta `200`**
+
+```json
+{ "enabled": false, "mode": "off" }
+```
+
+---
+
+### `POST /api/turboquant/config`
+
+**Body `application/json`**
+
+```json
+{ "enabled": true, "mode": "standard" }
+```
+
+`mode` aceita: `"off"`, `"standard"` (8-bit, ~50% reducao), `"aggressive"` (3-bit, ~73% reducao).
+
+---
+
+### `GET /api/turboquant/metrics`
+
+Retorna o historico de metricas TurboQuant (ultimas 50 inferencias).
+
+---
+
+## Backend
+
+### `GET /api/backend/config`
+
+Retorna o backend ativo.
+
+**Resposta `200`**
+
+```json
+{ "backend": "ollama" }
+```
+
+---
+
+### `POST /api/backend/config`
+
+Alterna o backend de geracao de texto.
+
+**Body `application/json`**
+
+```json
+{ "backend": "llamacpp" }
+```
+
+`backend` aceita: `"ollama"` ou `"llamacpp"`. Embeddings sempre via Ollama independente do backend ativo.
 
 ---
 

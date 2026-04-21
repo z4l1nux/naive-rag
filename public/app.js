@@ -2,6 +2,136 @@
  * State, config, DOM refs and chart rendering for the TQ KV Cache panel.
  * ──────────────────────────────────────────────────────────────────── */
 
+/* ── Reranker ──────────────────────────────────────────────────────────
+ * State, config, DOM refs and metric rendering for the Reranker panel.
+ * ──────────────────────────────────────────────────────────────────── */
+
+let rrConfig = { enabled: false, top_n: 10, top_k: 3 };
+let rrSaving = false;
+
+let rrHeaderBtn, rrBody, rrChevron, rrBadge, rrLastHint;
+let rrToggleBtn, rrTopN, rrTopK, rrApplyBtn, rrSavingEl;
+let rrCards;
+let rrValLatency, rrSubLatency, rrValCandidates, rrSubCandidates;
+let rrValImprovement, rrSubImprovement;
+
+function updateRrBadgeStyle() {
+  rrBadge.textContent  = rrConfig.enabled ? "ON" : "OFF";
+  rrBadge.className    = rrConfig.enabled ? "rr-badge rr-badge--on" : "rr-badge";
+  rrToggleBtn.textContent = rrConfig.enabled ? "Habilitado" : "Desabilitado";
+  rrToggleBtn.className   = rrConfig.enabled
+    ? "rr-toggle-btn rr-toggle-btn--on"
+    : "rr-toggle-btn";
+  rrTopN.value = rrConfig.top_n;
+  rrTopK.value = rrConfig.top_k;
+}
+
+async function applyRrConfig(enabled, top_n, top_k) {
+  if (rrSaving) return;
+  rrSaving = true;
+  rrSavingEl.classList.remove("hidden");
+  try {
+    const res = await fetch("/api/reranker/config", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ enabled, top_n: Number(top_n), top_k: Number(top_k) }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      console.error("Reranker config error:", err.detail);
+      return;
+    }
+    rrConfig = await res.json();
+    updateRrBadgeStyle();
+  } catch (e) {
+    console.error("Reranker config error:", e);
+  } finally {
+    rrSaving = false;
+    rrSavingEl.classList.add("hidden");
+  }
+}
+
+function renderRrMetrics(record, summary) {
+  rrCards.classList.remove("hidden");
+
+  rrValLatency.textContent    = fmtMs(record.latency_ms);
+  rrSubLatency.textContent    = `${record.n_candidates} pares avaliados`;
+  rrValCandidates.textContent = `${record.n_candidates}→${record.n_selected}`;
+  rrSubCandidates.textContent = `top-N → top-K`;
+
+  const imp = summary.avg_rank_improvement ?? 0;
+  rrValImprovement.textContent = imp > 0 ? `+${imp}` : imp === 0 ? "—" : `${imp}`;
+  rrSubImprovement.textContent = "posições médias ↑";
+  rrLastHint.textContent = `${fmtMs(record.latency_ms)} · ${record.n_candidates}→${record.n_selected}`;
+}
+
+function annotateSourcesWithRanks(sourcesEl, rankChanges) {
+  if (!sourcesEl || !rankChanges?.length) return;
+  const items = sourcesEl.querySelectorAll(".source-item");
+  items.forEach((item, toIdx) => {
+    const rc = rankChanges.find(r => r.to === toIdx);
+    if (!rc || rc.from < 0) return;
+    const delta = rc.from - rc.to;
+    const badge = document.createElement("span");
+    if (delta > 0) {
+      badge.className   = "source-rank-delta source-rank-delta--up";
+      badge.textContent = `↑${delta}`;
+      badge.title       = `Subiu ${delta} posição(ões) após reranking`;
+    } else if (delta < 0) {
+      badge.className   = "source-rank-delta source-rank-delta--down";
+      badge.textContent = `↓${Math.abs(delta)}`;
+      badge.title       = `Desceu ${Math.abs(delta)} posição(ões) após reranking`;
+    } else {
+      badge.className   = "source-rank-delta source-rank-delta--same";
+      badge.textContent = "=";
+      badge.title       = "Posição mantida após reranking";
+    }
+    item.insertBefore(badge, item.firstChild);
+  });
+}
+
+function initReranker() {
+  rrHeaderBtn     = document.getElementById("rr-header-btn");
+  rrBody          = document.getElementById("rr-body");
+  rrChevron       = document.getElementById("rr-chevron");
+  rrBadge         = document.getElementById("rr-badge");
+  rrLastHint      = document.getElementById("rr-last-hint");
+  rrToggleBtn     = document.getElementById("rr-toggle-btn");
+  rrTopN          = document.getElementById("rr-top-n");
+  rrTopK          = document.getElementById("rr-top-k");
+  rrApplyBtn      = document.getElementById("rr-apply-btn");
+  rrSavingEl      = document.getElementById("rr-saving");
+  rrCards         = document.getElementById("rr-cards");
+  rrValLatency    = document.getElementById("rr-val-latency");
+  rrSubLatency    = document.getElementById("rr-sub-latency");
+  rrValCandidates = document.getElementById("rr-val-candidates");
+  rrSubCandidates = document.getElementById("rr-sub-candidates");
+  rrValImprovement  = document.getElementById("rr-val-improvement");
+  rrSubImprovement  = document.getElementById("rr-sub-improvement");
+
+  rrHeaderBtn.addEventListener("click", () => {
+    const isHidden = rrBody.classList.toggle("hidden");
+    rrChevron.textContent = isHidden ? "▼" : "▲";
+  });
+
+  rrToggleBtn.addEventListener("click", () => {
+    applyRrConfig(!rrConfig.enabled, rrTopN.value, rrTopK.value);
+  });
+
+  rrApplyBtn.addEventListener("click", () => {
+    applyRrConfig(rrConfig.enabled, rrTopN.value, rrTopK.value);
+  });
+
+  fetch("/api/reranker/config")
+    .then(r => r.json())
+    .then(data => { rrConfig = data; updateRrBadgeStyle(); })
+    .catch(() => {});
+}
+
+/* ── TurboQuant ──────────────────────────────────────────────────────
+ * State, config, DOM refs and chart rendering for the TQ KV Cache panel.
+ * ──────────────────────────────────────────────────────────────────── */
+
 const TQ_COLORS = {
   "TQ OFF":     "#6b7280",
   "Standard":   "#22d3ee",
@@ -216,8 +346,8 @@ function initTurboQuant() {
 
   // Expand/collapse
   tqHeaderBtn.addEventListener("click", () => {
-    const open = tqBody.classList.toggle("hidden");
-    tqChevron.textContent = open ? "▼" : "▲";
+    const isHidden = tqBody.classList.toggle("hidden");
+    tqChevron.textContent = isHidden ? "▼" : "▲";
   });
 
   // Toggle enable/disable
@@ -552,6 +682,7 @@ async function sendQuery(question) {
   scrollToBottom();
 
   let accumulated = "";
+  let lastSourcesEl = null;
 
   try {
     const res = await fetch("/api/query", {
@@ -593,9 +724,15 @@ async function sendQuery(question) {
         if (event.type === "sources") {
           cursor.remove();
           if (event.sources.length > 0) {
-            body.appendChild(buildSources(event.sources));
+            lastSourcesEl = buildSources(event.sources);
+            body.appendChild(lastSourcesEl);
           }
           scrollToBottom();
+        }
+
+        if (event.type === "reranker") {
+          renderRrMetrics(event.record, event.summary);
+          annotateSourcesWithRanks(lastSourcesEl, event.record.rank_changes);
         }
 
         if (event.type === "metrics") {
@@ -682,4 +819,5 @@ function scrollToBottom() {
 /* ── Init ────────────────────────────────────────────────────────────── */
 
 loadKnowledgeBase();
+initReranker();
 initTurboQuant();

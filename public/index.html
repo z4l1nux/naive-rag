@@ -92,6 +92,54 @@
           </div>
         </div>
 
+        <!-- Reranker Panel -->
+        <div class="rr-panel" id="rr-panel">
+          <button class="rr-header" id="rr-header-btn" type="button">
+            <span class="rr-header-left">
+              <span class="rr-icon">⇅</span>
+              <span class="rr-title">RERANKER</span>
+              <span class="rr-badge" id="rr-badge">OFF</span>
+              <span class="rr-last-hint" id="rr-last-hint"></span>
+            </span>
+            <span class="rr-chevron" id="rr-chevron">▼</span>
+          </button>
+          <div class="rr-body hidden" id="rr-body">
+            <div class="rr-controls">
+              <button class="rr-toggle-btn" id="rr-toggle-btn" type="button">Desabilitado</button>
+              <label class="rr-input-label">top-N
+                <input type="number" id="rr-top-n" class="rr-input" value="10" min="2" max="50" step="1" />
+              </label>
+              <label class="rr-input-label">top-K
+                <input type="number" id="rr-top-k" class="rr-input" value="3" min="1" max="20" step="1" />
+              </label>
+              <button class="rr-apply-btn" id="rr-apply-btn" type="button">Aplicar</button>
+              <span class="rr-saving hidden" id="rr-saving">salvando…</span>
+            </div>
+            <div class="rr-cards hidden" id="rr-cards">
+              <div class="rr-card rr-card--teal">
+                <div class="rr-card-label">⏱ LATÊNCIA</div>
+                <div class="rr-card-value" id="rr-val-latency">—</div>
+                <div class="rr-card-sub" id="rr-sub-latency"></div>
+              </div>
+              <div class="rr-card rr-card--blue">
+                <div class="rr-card-label">⇉ CANDIDATOS</div>
+                <div class="rr-card-value" id="rr-val-candidates">—</div>
+                <div class="rr-card-sub" id="rr-sub-candidates"></div>
+              </div>
+              <div class="rr-card rr-card--green">
+                <div class="rr-card-label">↑ MELHORIA</div>
+                <div class="rr-card-value" id="rr-val-improvement">—</div>
+                <div class="rr-card-sub" id="rr-sub-improvement"></div>
+              </div>
+            </div>
+            <div class="rr-model-info">
+              <span class="rr-model-label">MODELO</span>
+              <span class="rr-model-name">cross-encoder/ms-marco-MiniLM-L-6-v2</span>
+              <span class="rr-model-note">lazy-load no primeiro uso · ~85 MB</span>
+            </div>
+          </div>
+        </div>
+
         <!-- TurboQuant KV Cache Panel -->
         <div class="tq-panel" id="tq-panel">
           <button class="tq-header" id="tq-header-btn" type="button">

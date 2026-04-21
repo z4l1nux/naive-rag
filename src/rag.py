@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import time
@@ -9,14 +10,18 @@ from .db import find_similar
 from .embeddings import client, get_embedding
 from . import turboquant
 from . import backend as backend_mod
+from . import reranker as reranker_mod
 
 TEXT_MODEL    = os.getenv("TEXT_MODEL",    "gemma4:latest")
 LLAMACPP_HOST = backend_mod.LLAMACPP_HOST
 LLAMACPP_MODEL = backend_mod.LLAMACPP_MODEL
 
 _SYSTEM_PROMPT = (
-    "Voce e um assistente especialista. Responda usando apenas as informacoes do contexto "
-    "fornecido. Se a resposta nao estiver no contexto, informe que nao possui essa informacao."
+    "Voce e um assistente especialista em RAG. Use o contexto fornecido como fonte principal. "
+    "Quando o contexto mencionar conceitos, termos ou descricoes que correspondam ao que foi "
+    "perguntado — mesmo que indiretamente — interprete e responda com base nessa informacao. "
+    "Apenas informe que nao possui a informacao se o contexto for genuinamente irrelevante para "
+    "a pergunta."
 )
 
 
@@ -33,7 +38,11 @@ async def rag_stream(question: str, top_k: int = 3) -> AsyncGenerator[str, None]
     """
     try:
         query_embedding = await get_embedding(question)
-        docs = find_similar(query_embedding, top_k)
+        # Fetch top_n candidates when reranker is active, top_k otherwise
+        docs = find_similar(query_embedding, reranker_mod.get_top_n(top_k))
+        docs = await asyncio.get_event_loop().run_in_executor(
+            None, reranker_mod.rerank, question, docs
+        )
 
         if not docs:
             yield _event({"type": "token", "content": "Nenhum documento encontrado na base de conhecimento."})
@@ -152,6 +161,16 @@ async def rag_stream(question: str, top_k: int = 3) -> AsyncGenerator[str, None]
             for d in docs
         ]
         yield _event({"type": "sources", "sources": sources})
+
+        # ── Metricas Reranker ─────────────────────────────────────────────
+        if reranker_mod.is_enabled():
+            rr_metrics = reranker_mod.get_metrics()
+            if rr_metrics:
+                yield _event({
+                    "type":    "reranker",
+                    "record":  rr_metrics[-1],
+                    "summary": reranker_mod.get_summary(),
+                })
 
         # ── Metricas TurboQuant ───────────────────────────────────────────
         if ollama_data is not None:

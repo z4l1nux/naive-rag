@@ -8,7 +8,7 @@
                         └──────┬──────┘
                                │ HTTP / SSE
                         ┌──────▼──────┐
-                        │  FastAPI     │  :3000
+                        │  FastAPI     │  :3001
                         │  (uvicorn)  │
                         └──┬───┬───┬──┘
                            │   │   │
@@ -18,9 +18,14 @@
        │  PostgreSQL  │  │    Ollama   │  │   public/   │
        │  + pgvector  │  │  (host)     │  │  (static)   │
        └─────────────┘  └─────────────┘  └─────────────┘
+                                │
+                        ┌──────▼──────┐
+                        │  llama.cpp  │  :8080 (opcional)
+                        │  (host)     │  backend alternativo
+                        └─────────────┘
 ```
 
-O Ollama roda no host (fora do Docker). O container da API o acessa via `host.docker.internal`.
+O Ollama e o llama.cpp rodam no host (fora do Docker). O container da API os acessa via `host.docker.internal`.
 
 ---
 
@@ -47,20 +52,45 @@ Instancia o `AsyncClient` do ollama com o host configurado via `OLLAMA_HOST`. Ex
 
 ### `src/rag.py` — pipeline RAG
 
-Orquestra as duas etapas como um `AsyncGenerator` que produz linhas SSE prontas para envio:
+Orquestra o pipeline completo como um `AsyncGenerator` que produz linhas SSE:
 
 ```
 rag_stream(question)
    │
-   ├─ get_embedding(question)         ← embedding da pergunta (async)
-   ├─ find_similar(embedding, top_k)  ← busca no pgvector (sync, threadpool)
-   ├─ client.chat(stream=True)        ← geracao com streaming (async)
+   ├─ get_embedding(question)                    ← embedding da pergunta (async)
+   ├─ find_similar(embedding, reranker.top_n)    ← busca top-N candidatos no pgvector
+   ├─ reranker.rerank(question, docs)            ← cross-encoder → top-K (async executor)
+   ├─ [Ollama | llama.cpp].chat(stream=True)     ← geracao com streaming
    │
-   ├─ yield "data: {token}\\n\\n"         ← um token por vez
-   └─ yield "data: {sources}\\n\\n"       ← fontes ao final
+   ├─ yield "data: {token}\\n\\n"                ← um token por vez
+   ├─ yield "data: {sources}\\n\\n"              ← fontes rerankeadas ao final
+   ├─ yield "data: {reranker}\\n\\n"             ← metricas do reranker (se ativo)
+   └─ yield "data: {metrics}\\n\\n"              ← metricas TurboQuant
 ```
 
-O `StreamingResponse` do FastAPI itera diretamente sobre esse generator, transmitindo cada linha para o cliente assim que ela e produzida.
+Quando o reranker esta desabilitado, `find_similar` usa `top_k` diretamente e o evento `reranker` nao e emitido.
+
+### `src/reranker.py` — cross-encoder
+
+Cross-encoder `cross-encoder/ms-marco-MiniLM-L-6-v2` (~85 MB, lazy-load no primeiro uso). Recebe a pergunta e os N candidatos do pgvector, avalia cada par (pergunta, chunk) em conjunto e retorna os K mais relevantes reordenados por score.
+
+Estado em memoria com `threading.Lock`. Exporta:
+- `get_top_n(fallback)` — retorna top_n se habilitado, fallback caso contrario
+- `rerank(query, docs)` — executa a inferencia e registra a metrica
+- `get_metrics()` / `get_summary()` — historico de latencias e rank_changes
+
+### `src/turboquant.py` — KV Cache quantization
+
+Gerencia o estado do TurboQuant e traduz o modo selecionado em opcoes Ollama (`num_ctx`, `num_batch`). Para llama.cpp, a quantizacao real e configurada no startup via `--cache-type-k` / `--cache-type-v`.
+
+Modos:
+- **off** — sem opcoes extras (Ollama usa defaults)
+- **standard** — `{"num_ctx": 4096, "num_batch": 256}` (~50% reducao de memoria estimada)
+- **aggressive** — `{"num_ctx": 4096, "num_batch": 512}` (~73% reducao de memoria estimada)
+
+### `src/backend.py` — abstração de backend
+
+Mantém o backend ativo (`ollama` | `llamacpp`) e expõe `GET/POST /api/backend/config`.
 
 ### `src/chunker.py` — divisor de texto
 
@@ -138,18 +168,20 @@ Browser              FastAPI              Ollama        PostgreSQL
 ## Fluxo de dados: consulta RAG
 
 ```
-Browser              FastAPI              Ollama        PostgreSQL
-   │                    │                    │               │
-   │── POST /query ─────►│                    │               │
-   │                    │── get_embedding() ─►│               │
-   │                    │◄─ queryVector[] ────│               │
-   │                    │── SELECT ... ORDER BY <=> ─────────►│
-   │                    │◄─ top-K chunks ──────────────────────│
-   │                    │                    │               │
-   │                    │── chat(stream) ────►│               │
-   │◄── data:{token} ───│◄─ token... ─────────│               │
-   │◄── data:{token} ───│◄─ token... ─────────│               │
-   │◄── data:{sources} ─│  (stream encerrado) │               │
+Browser          FastAPI           Reranker       Ollama      PostgreSQL
+   │                │                  │             │             │
+   │── POST /query ─►│                  │             │             │
+   │                │── get_embedding() ──────────────►│             │
+   │                │◄─ queryVector[] ───────────────── │             │
+   │                │── SELECT top-N ORDER BY <=> ──────────────────►│
+   │                │◄─ N chunks ───────────────────────────────────── │
+   │                │── rerank(query, N) ──►│             │             │
+   │                │◄─ top-K reordenados ──│             │             │
+   │                │── chat(stream) ────────────────────►│             │
+   │◄─ data:{token} ─│◄─ token... ─────────────────────── │             │
+   │◄─ data:{sources}│                  │             │             │
+   │◄─ data:{reranker}│  (metricas cross-encoder)      │             │
+   │◄─ data:{metrics}│  (metricas TurboQuant)          │             │
 ```
 
 ---

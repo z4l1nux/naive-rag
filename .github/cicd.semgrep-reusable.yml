@@ -1,0 +1,42 @@
+name: Semgrep Security Scan
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - "**"
+
+jobs:
+  semgrep_scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+
+      - name: Install Semgrep
+        run: |
+          python -m pip install --upgrade pip
+          pip install semgrep
+
+      - name: Run Semgrep (Enforce by PARANOIA_LEVEL)
+        run: |
+          PARANOIA_LEVEL=1   # ajuste aqui: 1 = ERROR (CRITICAL/HIGH), 2 = WARNING+ (MEDIUM+), 3 = INFO+ (LOW+)
+
+          if [ "$PARANOIA_LEVEL" -eq 1 ]; then
+            echo "Rodando em modo PARANOIA 1 (Bloqueia apenas ERROR)"
+            semgrep --config auto --severity=ERROR --error
+          elif [ "$PARANOIA_LEVEL" -eq 2 ]; then
+            echo "Rodando em modo PARANOIA 2 (Bloqueia WARNING e acima)"
+            semgrep --config auto --severity=ERROR --severity=WARNING --error
+          else
+            echo "Rodando em modo PARANOIA 3 (Bloqueia tudo/INFO e acima)"
+            semgrep --config auto --severity=ERROR --severity=WARNING --severity=INFO --error
+          fi

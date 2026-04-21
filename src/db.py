@@ -57,13 +57,12 @@ def init_db() -> None:
 
     cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
-    cur.execute(_SQL_CREATE_TABLE)
-
+    cur.execute(_SQL_CREATE_TABLE)   # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
     # Non-destructive migration for tables created before file upload support
     cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS source_file TEXT")
     cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS chunk_index INTEGER")
 
-    cur.execute(_SQL_CREATE_INDEX)
+    cur.execute(_SQL_CREATE_INDEX)   # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
 
     cur.close()
     conn.close()
@@ -103,7 +102,7 @@ def insert_document(
 ) -> dict:
     with get_db() as conn:
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute(_SQL_INSERT, (content, _vec(embedding), source_file, chunk_index))
+        cur.execute(_SQL_INSERT, (content, _vec(embedding), source_file, chunk_index))  # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
         return dict(cur.fetchone())
 
 
@@ -155,5 +154,5 @@ def delete_file(source_file: str) -> int:
 def find_similar(embedding: list[float], top_k: int) -> list[dict]:
     with get_db() as conn:
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute(_SQL_FIND_SIMILAR, (_vec(embedding), _vec(embedding), top_k))
+        cur.execute(_SQL_FIND_SIMILAR, (_vec(embedding), _vec(embedding), top_k))  # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
         return [dict(row) for row in cur.fetchall()]

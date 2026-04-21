@@ -13,6 +13,9 @@ RUN uv sync --frozen --no-dev
 COPY src/ ./src/
 COPY public/ ./public/
 
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+USER appuser
+
 EXPOSE 3001
 
 CMD ["/bin/sh", "-c", "/app/.venv/bin/uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-3001}"]

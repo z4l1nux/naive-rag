@@ -1,7 +1,12 @@
 name: vet OSS Components
 
 on:
+  push:
+    branches:
+      - "**"
   pull_request:
+    branches:
+      - "**"
 
 permissions:
   # Required for actions/checkout@v4

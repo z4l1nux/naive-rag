@@ -11,10 +11,40 @@ _pool: psycopg2.pool.ThreadedConnectionPool | None = None
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "768"))
 
 # HNSW supports up to 2000 dims for vector, up to 4000 dims for halfvec.
+# Values come from a binary choice over a validated integer — never user input.
 _use_halfvec = EMBEDDING_DIM > 2000
 _col_type  = f"halfvec({EMBEDDING_DIM})" if _use_halfvec else f"vector({EMBEDDING_DIM})"
 _cast_type = "halfvec" if _use_halfvec else "vector"
 _ops_class = "halfvec_cosine_ops" if _use_halfvec else "vector_cosine_ops"
+
+# SQL templates built once at module load — interpolation happens here, not inside execute().
+# DDL type names (vector/halfvec) cannot be parameterised in PostgreSQL; the values
+# are derived from _use_halfvec (binary flag) and EMBEDDING_DIM (integer), not from input.
+_SQL_CREATE_TABLE = f"""
+    CREATE TABLE IF NOT EXISTS documents (
+        id          SERIAL PRIMARY KEY,
+        content     TEXT NOT NULL,
+        embedding   {_col_type},
+        source_file TEXT,
+        chunk_index INTEGER,
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+    )"""
+
+_SQL_CREATE_INDEX = f"""
+    CREATE INDEX IF NOT EXISTS documents_embedding_hnsw_idx
+    ON documents USING hnsw (embedding {_ops_class})"""
+
+_SQL_INSERT = f"""
+    INSERT INTO documents (content, embedding, source_file, chunk_index)
+    VALUES (%s, %s::{_cast_type}, %s, %s)
+    RETURNING id, content, source_file, chunk_index, created_at"""
+
+_SQL_FIND_SIMILAR = f"""
+    SELECT id, content, source_file,
+           ROUND((1 - (embedding <=> %s::{_cast_type}))::numeric, 4) AS similarity
+    FROM documents
+    ORDER BY embedding <=> %s::{_cast_type}
+    LIMIT %s"""
 
 
 def init_db() -> None:
@@ -27,25 +57,13 @@ def init_db() -> None:
 
     cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
-    cur.execute(f"""
-        CREATE TABLE IF NOT EXISTS documents (
-            id          SERIAL PRIMARY KEY,
-            content     TEXT NOT NULL,
-            embedding   {_col_type},
-            source_file TEXT,
-            chunk_index INTEGER,
-            created_at  TIMESTAMPTZ DEFAULT NOW()
-        )
-    """)
+    cur.execute(_SQL_CREATE_TABLE)
 
     # Non-destructive migration for tables created before file upload support
     cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS source_file TEXT")
     cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS chunk_index INTEGER")
 
-    cur.execute(f"""
-        CREATE INDEX IF NOT EXISTS documents_embedding_hnsw_idx
-        ON documents USING hnsw (embedding {_ops_class})
-    """)
+    cur.execute(_SQL_CREATE_INDEX)
 
     cur.close()
     conn.close()
@@ -85,14 +103,7 @@ def insert_document(
 ) -> dict:
     with get_db() as conn:
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute(
-            f"""
-            INSERT INTO documents (content, embedding, source_file, chunk_index)
-            VALUES (%s, %s::{_cast_type}, %s, %s)
-            RETURNING id, content, source_file, chunk_index, created_at
-            """,
-            (content, _vec(embedding), source_file, chunk_index),
-        )
+        cur.execute(_SQL_INSERT, (content, _vec(embedding), source_file, chunk_index))
         return dict(cur.fetchone())
 
 
@@ -144,14 +155,5 @@ def delete_file(source_file: str) -> int:
 def find_similar(embedding: list[float], top_k: int) -> list[dict]:
     with get_db() as conn:
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute(
-            f"""
-            SELECT id, content, source_file,
-                   ROUND((1 - (embedding <=> %s::{_cast_type}))::numeric, 4) AS similarity
-            FROM documents
-            ORDER BY embedding <=> %s::{_cast_type}
-            LIMIT %s
-            """,
-            (_vec(embedding), _vec(embedding), top_k),
-        )
+        cur.execute(_SQL_FIND_SIMILAR, (_vec(embedding), _vec(embedding), top_k))
         return [dict(row) for row in cur.fetchall()]

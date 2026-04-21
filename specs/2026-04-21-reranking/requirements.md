@@ -85,3 +85,24 @@ Os campos de métricas capturados por inferência:
 - **Fine-tuning do cross-encoder** — fora do escopo educacional
 - **Múltiplos modelos de reranker simultâneos** — uma única configuração ativa por vez
 - **Persistência de métricas** — ring buffer em memória (50 registros), sem banco
+
+---
+
+## Non-Functional Requirements
+
+### Segurança
+
+| Requisito | Decisão | Status |
+|-----------|---------|--------|
+| Exposição de queries em métricas | `/api/reranker/metrics` retorna campo `query` — aceito para single-tenant educacional | ⚠️ aceito |
+| Cap em top_n | Sem MAX_TOP_N no servidor; UI limita a 50 | ⚠️ aberto |
+| Supply chain do modelo ML | `cross-encoder/ms-marco-MiniLM-L-6-v2` baixado do Hugging Face sem verificação de hash | ⚠️ aceito para educacional |
+| Autenticação nos endpoints de config | Sem autenticação — qualquer cliente pode habilitar/desabilitar o reranker | ⚠️ aceito — deploy local |
+
+### Performance
+
+| Requisito | Decisão |
+|-----------|---------|
+| Lazy-load do modelo | Cross-encoder carregado na primeira query — latência de ~5s apenas no cold start |
+| Inferência em executor | `run_in_executor(None, reranker.rerank, ...)` evita bloquear o event loop |
+| Latência de reranking | Threshold aceito: < 2s para `top_n=10` em CPU (validado em spike: ~400ms) |

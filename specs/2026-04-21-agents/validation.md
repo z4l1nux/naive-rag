@@ -191,6 +191,53 @@ curl -s -X DELETE http://localhost:3001/api/documents/<id>
 
 ---
 
+## 10. Segurança (shift-left)
+
+Executar localmente antes de qualquer PR que toque `src/` ou `Dockerfile`.
+
+```bash
+# SAST — Semgrep (0 findings blocking esperado)
+uv tool run semgrep --config auto src/ --text
+# Esperado: "Findings: 0 (0 blocking)"
+
+# SCA — pip-audit (0 vulnerabilidades conhecidas esperado)
+uv tool run --python 3.12 pip-audit --requirement <(uv export --no-hashes --no-dev)
+# Esperado: "No known vulnerabilities found"
+
+# Container não-root — verificar USER no Dockerfile
+grep -n "^USER" Dockerfile
+# Esperado: "USER appuser" (ou outro usuário não-root)
+
+# Sem segredos em código
+git log --all --format="%H" | head -20 | xargs -I{} git show {} -- "*.py" "*.yml" | \
+  grep -iE "(password|secret|api_key|token)\s*=\s*['\"][^'\"]{8,}" | grep -v "test\|example\|placeholder"
+# Esperado: nenhuma linha
+```
+
+### Verificações de comportamento seguro
+
+```bash
+# topK sem cap — verificar que valores muito altos não quebram o servidor
+curl -s -X POST http://localhost:3001/api/query \
+  -H "Content-Type: application/json" \
+  -d '{"question": "teste", "topK": 100}'
+# Esperado: resposta normal (sem crash); documentar se retornar mais de 20 chunks
+
+# Upload de tipo não suportado
+curl -s -X POST http://localhost:3001/api/upload \
+  -F "file=@/etc/passwd"
+# Esperado: HTTP 400 com {"detail": "Tipo de arquivo nao suportado"}
+
+# Path traversal via filename (mitigado pelo parser, não pelo nome)
+echo "teste" > /tmp/test.txt
+curl -s -X POST http://localhost:3001/api/upload \
+  -F "file=@/tmp/test.txt;filename=../../etc/test.txt"
+# Esperado: arquivo processado normalmente, source_file salvo como "../../etc/test.txt"
+# Nota: sem execução de arquivo — risco limitado a nome salvo no banco
+```
+
+---
+
 ## Indicadores de falha
 
 | Sintoma | Causa provável |

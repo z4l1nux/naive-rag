@@ -84,3 +84,28 @@ O llama-server expõe `prompt_tokens` e `completion_tokens` via `usage` no chunk
 
 **Ring buffer de 50 registros para métricas TurboQuant.**
 Sem banco, sem disco. `collections.deque(maxlen=50)` garante que métricas antigas sejam descartadas automaticamente — zero risco de memory leak em sessões longas.
+
+---
+
+## Non-Functional Requirements
+
+### Segurança
+
+| Requisito | Decisão | Status |
+|-----------|---------|--------|
+| Container não-root | `USER appuser` no Dockerfile — processo uvicorn roda sem privilégios root | ✅ |
+| Dependências sem CVEs conhecidos | `pip-audit` no CI via `vet-sca-reusable.yml`; Dependabot ativo | ✅ |
+| Sem segredos em código | TruffleHog no git history via `trufflehog.yml` | ✅ |
+| SAST sem findings blocking | Semgrep `auto` ruleset em todo push/PR via `cicd.semgrep-reusable.yml` | ✅ |
+| SQL Injection (DDL) | Constantes de módulo com nosemgrep documentado — DDL não parametrizável no PostgreSQL | ✅ falso positivo documentado |
+| Prompt injection (LLM01) | Sistema instrui o modelo a usar apenas o contexto; sem sanitização de conteúdo recuperado | ⚠️ aceito para projeto educacional |
+| Autenticação | Sem autenticação — todos os endpoints públicos | ⚠️ aceito — deploy local |
+| Upload de arquivos maliciosos | Limite de 20 MB; extensões restritas a `{pdf,docx,md,txt}`; deps atualizadas | ✅ parcialmente |
+
+### Performance
+
+| Requisito | Decisão |
+|-----------|---------|
+| Ingestão não bloqueia servidor | Processamento sequencial de chunks em threadpool do FastAPI |
+| Streaming SSE sem buffering | Header `X-Accel-Buffering: no` |
+| Connection pool limitado | `maxconn=5` no `ThreadedConnectionPool` |

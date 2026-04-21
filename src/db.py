@@ -57,12 +57,12 @@ def init_db() -> None:
 
     cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
-    cur.execute(_SQL_CREATE_TABLE)   # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
+    cur.execute(_SQL_CREATE_TABLE)   # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query,python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.lang.security.audit.sqli.psycopg-sqli.psycopg-sqli
     # Non-destructive migration for tables created before file upload support
     cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS source_file TEXT")
     cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS chunk_index INTEGER")
 
-    cur.execute(_SQL_CREATE_INDEX)   # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
+    cur.execute(_SQL_CREATE_INDEX)   # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query,python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.lang.security.audit.sqli.psycopg-sqli.psycopg-sqli
 
     cur.close()
     conn.close()

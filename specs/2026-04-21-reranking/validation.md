@@ -164,6 +164,37 @@ curl -s -X POST http://localhost:3001/api/reranker/config \
 
 ---
 
+## 9. Segurança (shift-left)
+
+```bash
+# SAST — 0 findings blocking
+uv tool run semgrep --config auto src/ --text
+# Esperado: "Findings: 0 (0 blocking)"
+
+# SCA — 0 vulnerabilidades
+uv tool run --python 3.12 pip-audit --requirement <(uv export --no-hashes --no-dev)
+# Esperado: "No known vulnerabilities found"
+
+# top_n sem cap absoluto — comportamento sob valor extremo
+curl -s -X POST http://localhost:3001/api/reranker/config \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true, "top_n": 50, "top_k": 3}'
+# Esperado: aceito (50 é o max da UI); documentar latência do cross-encoder com 50 pares
+
+# Exposição de queries em métricas
+curl -s http://localhost:3001/api/reranker/metrics | python3 -c "
+import sys, json
+records = json.load(sys.stdin)
+for r in records:
+    if 'query' in r:
+        print('WARN: campo query exposto:', r['query'][:50])
+"
+# Esperado (single-tenant educacional): campo query presente — aceito
+# Em ambiente multi-tenant: remover campo query das métricas
+```
+
+---
+
 ## Indicadores de falha
 
 | Sintoma | Causa provável |

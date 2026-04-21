@@ -29,6 +29,36 @@ SSE é unidirecional e suficiente para streaming de texto. Mais simples, funcion
 **Por que `halfvec` condicional?**
 pgvector suporta `vector` até 2000 dims. Modelos maiores (ex.: `nomic-embed-text`, 1536 dims) cabem em `vector`; modelos com > 2000 dims usam `halfvec` automaticamente via `EMBEDDING_DIM`.
 
+## Segurança (SDLC)
+
+### Ferramentas escolhidas
+
+| Camada | Ferramenta | Trigger | Comando local |
+|--------|-----------|---------|---------------|
+| SAST | Semgrep (`auto` ruleset) | push + PR | `uv tool run semgrep --config auto src/ --text` |
+| SCA | pip-audit (via safedep/vet-action) | push + PR | `uv tool run --python 3.12 pip-audit --requirement <(uv export --no-hashes --no-dev)` |
+| Secrets | TruffleHog (git history) | push + PR | workflow `trufflehog.yml` |
+
+### Workflows em `.github/workflows/`
+
+| Arquivo | Ferramenta | Trigger |
+|---------|-----------|---------|
+| `cicd.semgrep-reusable.yml` | Semgrep SAST | push em `**`, PR em `**` |
+| `vet-sca-reusable.yml` | safedep/vet (SCA) | push em `**`, PR em `**` |
+| `trufflehog.yml` | TruffleHog (secrets) | push em `**`, PR em `**` |
+
+### Postura atual
+
+| Controle | Status |
+|----------|--------|
+| Container não-root | ✅ `USER appuser` no Dockerfile |
+| CVEs em dependências | ✅ 0 conhecidos (pip-audit limpo) |
+| Segredos em histórico git | ✅ TruffleHog sem findings |
+| SAST blocking | ✅ Semgrep 0 findings (nosemgrep documentado em `src/db.py` para DDL não parametrizável) |
+| Autenticação | ⚠️ Sem auth — aceito para projeto educacional local |
+| Prompt injection (LLM01) | ⚠️ Sem sanitização de conteúdo recuperado — aceito para projeto educacional |
+| Rate limiting | ⚠️ Sem rate limit nas queries — aceito para projeto educacional |
+
 ## Lacunas conhecidas
 
 | Lacuna | Impacto | Status |
